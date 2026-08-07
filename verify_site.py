@@ -1,11 +1,28 @@
-"""Browser checks for the generated site. Run from the repo root: python3 verify_site.py"""
+"""Browser checks for the generated site.
+
+    python3 verify_site.py                                        # local files
+    python3 verify_site.py https://megan8821.github.io/idontwannareadpaper/
+
+With no argument the local build in this directory is checked; pass a base URL
+to run the same checks against the deployed site.
+"""
 import os
 import sys
+import urllib.request
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-INDEX = "file://" + os.path.join(ROOT, "index.html")
+BASE = sys.argv[1] if len(sys.argv) > 1 else "file://" + ROOT + "/"
+if not BASE.endswith("/"):
+    BASE += "/"
+INDEX = BASE + "index.html"
+print("checking " + BASE)
 fails = []
+
+
+def fetch(path):
+    with urllib.request.urlopen(BASE + path) as r:
+        return r.read().decode("utf-8")
 
 
 def check(name, cond, detail=""):
@@ -15,7 +32,11 @@ def check(name, cond, detail=""):
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch()
+    # PW_CHROMIUM lets a machine with a preinstalled browser point at it
+    # instead of the copy Playwright downloads for itself.
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    b = p.chromium.launch(executable_path=os.environ.get("PW_CHROMIUM") or None,
+                          proxy={"server": proxy} if proxy else None)
     errors = []
     pg = b.new_page(viewport={"width": 1280, "height": 1000})
     pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
@@ -76,11 +97,11 @@ with sync_playwright() as p:
     check("back on index", pg.locator(".card").count() == n)
 
     # archive index
-    pg.goto("file://" + os.path.join(ROOT, "archive", "index.html"))
+    pg.goto(BASE + "archive/index.html")
     pg.wait_for_timeout(200)
     check("archive index lists months", pg.locator("li a").count() > 0)
 
-    src = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
+    src = fetch("index.html")
     check("no localStorage", "localStorage" not in src and "sessionStorage" not in src)
     check("self-contained", "<link" not in src and "<script src" not in src)
     check("no JS errors overall", not errors, errors)
