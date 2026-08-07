@@ -10,7 +10,41 @@
 `data/YYYY-MM-DD.json` 並推上 `main`。推上去之後 GitHub Actions 會重建網站，
 https://megan8821.github.io/idontwannareadpaper/ 就會更新。
 
+## 鐵則
+
+**這個任務只有兩種結束方式：推上 `main`，或留下一封 Gmail 草稿說明卡在哪裡。**
+不准無聲結束。2026-08-07 的第一次試跑就是無聲失敗的——沒有推任何東西，也沒有留下
+任何線索，事後完全查不出原因。
+
 ## 步驟
+
+### 0. 先把工具鏈架起來（在讀論文之前）
+
+環境的基礎映像沒有預裝 Playwright，而且瀏覽器路徑不是預設值。先花兩分鐘確認
+工具鏈能動，再開始花時間讀論文——這樣環境壞掉時失敗得便宜，而不是讀完三篇才發現
+推不上去。
+
+```
+pip install playwright                       # 基礎映像沒有，每次都要裝
+export PW_CHROMIUM=/opt/pw-browsers/chromium # 預裝的瀏覽器，不要另外下載
+python3 build_site.py && python3 verify_site.py
+```
+
+這一輪空轉跑的是既有資料，應該 21 項全過。**沒有全過就不要往下做**，直接跳到第 9 節
+寫 Gmail 草稿，把錯誤訊息貼進去。
+
+`/opt/pw-browsers/` 底下的版本號會變（例如 `chromium-1194`），`chromium` 這個
+symlink 通常會指到對的地方；真的找不到就 `ls /opt/pw-browsers/` 看實際有什麼。
+如果 Playwright 抱怨版本對不上（`Executable doesn't exist at ...`），那是 pip 裝到
+的版本比映像裡的瀏覽器新，用 `PW_CHROMIUM` 指過去就能繞過。
+
+順帶確認 push 權限，這是整個自動化的命脈：
+
+```
+git remote -v && git push --dry-run origin HEAD:refs/heads/main
+```
+
+dry-run 失敗就代表今天推不上去，一樣跳到第 9 節，不要白讀三篇論文。
 
 ### 1. 先確認今天還沒做過
 
@@ -73,10 +107,15 @@ python3 build_site.py            # 重建 index.html 與 archive/
 python3 verify_site.py           # 21 項瀏覽器檢查，必須全過
 ```
 
-`verify_site.py` 需要 Playwright。環境裡已有瀏覽器時用
-`PW_CHROMIUM=<chrome 路徑> python3 verify_site.py` 指過去，不要另外下載。
+工具鏈在第 0 節已經架好了，這裡直接用。
 
-檢查沒過就不要推。
+檢查沒過就不要推——但要分清楚是哪一種沒過。內容有問題（章節缺漏、JSON 寫錯）就回去
+修內容；如果是環境本身壞掉（裝不了 Playwright、找不到瀏覽器），第 0 節就該攔下來了，
+不該拖到這裡。
+
+`verify_site.py` 也可以吃一個 base URL 去檢查線上網站，但**容器裡的 Chromium 連不到
+外網**（連 example.com 都是 connection reset），所以線上檢查在這個環境跑不起來，不要
+浪費時間試。要確認線上狀態就用 `curl`，見第 8 節。
 
 ### 8. 推上 main
 
@@ -91,11 +130,25 @@ commit 進去的 HTML 有出入也以 CI 的產物為準，但保持 repo 內容
 
 ### 9. 失敗退路
 
-任何一步失敗而且當場修不掉——抓不到 arXiv、build 壞掉、驗證沒過、推不上去——
-建立一封 Gmail 草稿當警示，主旨 `[MIR agent] 失敗 YYYY-MM-DD`，內文寫清楚卡在
-哪一步、錯誤訊息是什麼、已經做到哪裡。不要無聲失敗。
+任何一步失敗而且當場修不掉——工具鏈架不起來、抓不到 arXiv、build 壞掉、驗證沒過、
+推不上去——建立一封 Gmail 草稿當警示：
 
-當天已經寫好但推不上去的分析內容，一併放進那封草稿，不要弄丟。
+- 主旨：`[MIR agent] 失敗 YYYY-MM-DD`
+- 內文：卡在第幾步、完整錯誤訊息、已經做到哪裡、你試過什麼
+
+**當天已經寫好但推不上去的分析內容，整份 JSON 貼進那封草稿**，不要弄丟——那是好幾
+小時的閱讀成果，重跑一次不會得到一樣的東西。
+
+Gmail 是透過連接器提供的。如果連 Gmail 工具都叫不到（`mcp__Gmail__*` 不存在），那
+就把同樣的內容完整寫在最後的回覆裡——排程跑完會推播通知，至少人打開來看得到。
+
+### 10. 收尾回報
+
+不管成功失敗，最後都要明確說出這三件事，不要只說「完成了」：
+
+- 推上去了沒有，commit SHA 是什麼
+- 選了哪三篇、為什麼選它們（這是判斷不是演算法，寫下來才看得出有沒有偏誤）
+- 過程中有什麼不對勁但你自己繞過去了
 
 ## 尚未定案的部分
 
