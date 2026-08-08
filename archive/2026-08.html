@@ -21,6 +21,12 @@
     border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
   nav.site a:hover { border-bottom-color:var(--accent); }
   nav.site .here { color:var(--ink2); border:0; }
+  /* Shown only when the newest entry is behind today -- the site reporting on
+     its own freshness, so a run that dies without pushing is still visible. */
+  .stale { padding:12px 16px; margin-bottom:18px; border-radius:10px; font-size:.9rem;
+    background:color-mix(in srgb, var(--warn) 12%, var(--panel));
+    border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .stale b { color:var(--warn); }
   .stats { display:flex; gap:26px; flex-wrap:wrap; padding:14px 18px; background:var(--panel);
     border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); margin-bottom:18px; }
   .stat b { display:block; font-size:1.35rem; line-height:1.2; }
@@ -86,6 +92,8 @@
     <div class="sub"><span class="zh-only">2026-08 月封存</span><span class="en-only">2026-08 archive</span></div>
   </header>
   <nav class="site"><a href="../index.html">← 最新 / Recent</a> <span class="here">2026-08</span> <a href="index.html">全部月份 / all months</a></nav>
+
+  <div class="stale" id="stale" data-latest="2026-08-05" hidden></div>
 
   <div class="stats">
     <div class="stat"><b>3</b><span class="zh-only">論文</span><span class="en-only">papers</span></div>
@@ -321,6 +329,28 @@ the open gaps are clear too. the online (real-time) version the authors flag is 
 </div>
 
 <script>
+  // The freshness banner is computed in the browser, not at build time, because
+  // the failure it reports on is precisely the case where nothing gets rebuilt.
+  // A run that dies before pushing leaves yesterday's page in place; that page
+  // still notices, every time someone opens it.
+  function updateStale() {
+    var el = document.getElementById('stale'); if (!el) { return; }
+    el.hidden = true;
+    var latest = el.dataset.latest; if (!/^\d{4}-\d{2}-\d{2}$/.test(latest)) { return; }
+    var p = latest.split('-'), now = new Date();
+    var days = Math.floor(
+      (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+       Date.UTC(+p[0], +p[1] - 1, +p[2])) / 86400000);
+    if (days < 2) { return; }   // today or yesterday is normal
+    el.innerHTML =
+      '<span class="zh-only"><b>已經 ' + days + ' 天沒有更新。</b>' +
+      '最新一天是 ' + latest + '。每日任務應該每天都會加一天，所以這代表它壞了。</span>' +
+      '<span class="en-only"><b>No update for ' + days + ' days.</b> ' +
+      'The newest day is ' + latest + '. The daily run should add one every day, so this means it is broken.</span>';
+    el.hidden = false;
+  }
+  updateStale();
+
   var filters = new Set(); var deepOnly = false;
   function togglePaper(head) { head.parentElement.classList.toggle('open'); }
   function setAll(open) { document.querySelectorAll('.card').forEach(function (c) { c.classList.toggle('open', open); }); }

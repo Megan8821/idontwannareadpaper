@@ -101,6 +101,29 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     check("archive index lists months", pg.locator("li a").count() > 0)
 
+    # The freshness banner is the only thing that reports a broken daily run,
+    # so drive it at both a fresh and a stale date rather than trusting whatever
+    # the current data happens to produce.
+    pg.goto(INDEX)
+    pg.wait_for_timeout(200)
+
+    def stale_at(days_ago):
+        return pg.evaluate(
+            """(n) => {
+                 const el = document.getElementById('stale');
+                 const d = new Date(Date.now() - n * 86400000);
+                 el.dataset.latest = d.toISOString().slice(0, 10);
+                 updateStale();
+                 return {hidden: el.hidden, text: el.innerText};
+               }""", days_ago)
+
+    check("fresh data shows no stale banner", stale_at(0)["hidden"])
+    check("yesterday still counts as fresh", stale_at(1)["hidden"])
+    two = stale_at(2)
+    check("two days behind warns", not two["hidden"] and "2" in two["text"], two["text"][:60])
+    ten = stale_at(10)
+    check("banner counts the days", "10" in ten["text"], ten["text"][:60])
+
     src = fetch("index.html")
     check("no localStorage", "localStorage" not in src and "sessionStorage" not in src)
     check("self-contained", "<link" not in src and "<script src" not in src)
