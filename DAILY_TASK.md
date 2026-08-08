@@ -13,38 +13,29 @@ https://megan8821.github.io/idontwannareadpaper/ 就會更新。
 ## 鐵則
 
 **這個任務只有兩種結束方式：推上 `main`，或留下一封 Gmail 草稿說明卡在哪裡。**
-不准無聲結束。2026-08-07 的第一次試跑就是無聲失敗的——沒有推任何東西，也沒有留下
-任何線索，事後完全查不出原因。
+
+不准無聲結束。2026-08-07 的試跑和 2026-08-08 的第一次正式執行都是無聲失敗的——沒有
+推任何東西，也沒有留下任何線索，事後完全查不出原因。**寧可留下一封語焉不詳的草稿，
+也不要什麼都不留。** 如果你讀到這裡而且今天註定要失敗，先去寫那封草稿，再回來繼續
+嘗試。
 
 ## 步驟
 
-### 0. 先把工具鏈架起來（在讀論文之前）
+### 0. 先確認推得上去（在讀論文之前）
 
-環境的基礎映像沒有預裝 Playwright，而且瀏覽器路徑不是預設值。先花兩分鐘確認
-工具鏈能動，再開始花時間讀論文——這樣環境壞掉時失敗得便宜，而不是讀完三篇才發現
-推不上去。
-
-```
-pip install playwright                       # 基礎映像沒有，每次都要裝
-export PW_CHROMIUM=/opt/pw-browsers/chromium # 預裝的瀏覽器，不要另外下載
-python3 build_site.py && python3 verify_site.py
-```
-
-這一輪空轉跑的是既有資料，應該 21 項全過。**沒有全過就不要往下做**，直接跳到第 9 節
-寫 Gmail 草稿，把錯誤訊息貼進去。
-
-`/opt/pw-browsers/` 底下的版本號會變（例如 `chromium-1194`），`chromium` 這個
-symlink 通常會指到對的地方；真的找不到就 `ls /opt/pw-browsers/` 看實際有什麼。
-如果 Playwright 抱怨版本對不上（`Executable doesn't exist at ...`），那是 pip 裝到
-的版本比映像裡的瀏覽器新，用 `PW_CHROMIUM` 指過去就能繞過。
-
-順帶確認 push 權限，這是整個自動化的命脈：
+整個自動化的命脈是 push。先花三十秒確認它通，再開始花時間讀論文——這樣環境壞掉時
+失敗得便宜，而不是讀完三篇才發現推不上去。
 
 ```
-git remote -v && git push --dry-run origin HEAD:refs/heads/main
+python3 build_site.py                                      # 只用標準函式庫，不需要裝東西
+git push --dry-run origin HEAD:refs/heads/main
 ```
 
-dry-run 失敗就代表今天推不上去，一樣跳到第 9 節，不要白讀三篇論文。
+任何一個失敗就不要往下做，直接跳到第 9 節寫 Gmail 草稿，把錯誤訊息貼進去。
+
+**不需要在這裡跑 `verify_site.py`。** 那 21 項瀏覽器檢查已經搬到 GitHub Actions 裡，
+push 之後 CI 會自己跑，沒過就不會部署而且你會看到紅燈。這個工作階段不需要
+Playwright，也不需要瀏覽器——過去嘗試在這裡裝 Playwright 是失敗的主因之一。
 
 ### 1. 先確認今天還沒做過
 
@@ -100,22 +91,20 @@ arXiv 請求控制在七到八次以內**——大致是三次列表頁加三到
 schema 完整定義在 `build_site.py` 開頭的 docstring，照著寫。檔名是
 `data/YYYY-MM-DD.json`，日期用台北時間。
 
-### 7. 重建與驗證
+### 7. 重建
 
 ```
-python3 build_site.py            # 重建 index.html 與 archive/
-python3 verify_site.py           # 21 項瀏覽器檢查，必須全過
+python3 -c "import json,sys; json.load(open('data/YYYY-MM-DD.json'))"   # 先確定 JSON 合法
+python3 build_site.py                                                  # 重建 index.html 與 archive/
 ```
 
-工具鏈在第 0 節已經架好了，這裡直接用。
+`build_site.py` 只用標準函式庫，不需要裝任何東西。它跑得過、而且新的三篇有出現在
+`index.html` 裡，就夠格推上去了。
 
-檢查沒過就不要推——但要分清楚是哪一種沒過。內容有問題（章節缺漏、JSON 寫錯）就回去
-修內容；如果是環境本身壞掉（裝不了 Playwright、找不到瀏覽器），第 0 節就該攔下來了，
-不該拖到這裡。
-
-`verify_site.py` 也可以吃一個 base URL 去檢查線上網站，但**容器裡的 Chromium 連不到
-外網**（連 example.com 都是 connection reset），所以線上檢查在這個環境跑不起來，不要
-浪費時間試。要確認線上狀態就用 `curl`，見第 8 節。
+21 項瀏覽器檢查由 GitHub Actions 負責，不在這裡跑。真的想在本地跑也可以
+（`pip install playwright` 之後 `python3 verify_site.py`），但**那是可選的，裝不起來
+就別裝**，不要讓它擋住當天的產出。順帶一提，容器裡的 Chromium 連不到外網，所以
+`verify_site.py` 吃線上網址的那個模式在這裡跑不起來，要確認線上狀態就用 `curl`。
 
 ### 8. 推上 main
 
@@ -125,8 +114,12 @@ commit 進去的 HTML 有出入也以 CI 的產物為準，但保持 repo 內容
 
 推完確認兩件事：
 
-- workflow「Build and deploy site」跑完是 success
+- workflow「Build and deploy site」跑完是 success。它會 build、跑 21 項瀏覽器檢查、
+  然後部署——檢查沒過就不會部署，所以紅燈代表網站沒更新，要處理
 - `curl -sI https://megan8821.github.io/idontwannareadpaper/` 回 200
+
+CI 紅燈而你當場修不掉的話，一樣照第 9 節寫 Gmail 草稿。資料已經在 `main` 上不會弄丟，
+但網站沒更新這件事要有人知道。
 
 ### 9. 失敗退路
 

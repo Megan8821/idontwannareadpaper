@@ -37,6 +37,17 @@ jobs:
       - name: Build site
         run: python3 build_site.py data _site
 
+      # The browser checks live here rather than in the daily agent session.
+      # CI has a reproducible environment; the agent's does not, and a failure
+      # to install Playwright there used to block the whole day's run.
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Verify built site
+        run: python3 verify_site.py "file://$PWD/_site/"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
