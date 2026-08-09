@@ -61,6 +61,35 @@ arXiv 請求控制在七到八次以內**——大致是三次列表頁加三到
 這個環境抓到的 arXiv 內容有延遲，列表上「最新」的日期可能落後真實日期好幾週。
 這是預期的，照樣挑列表上最新的未讀論文即可，不要為了湊到今天的日期而空手而歸。
 
+#### 每週一另外掃一次期刊與會議
+
+arXiv 是預印本，涵蓋不到正式發表的東西。每週一（台北時間）在挑選之前，多花幾次
+請求掃一下這些來源，把值得讀的加進當週候選。其他日子不用掃。
+
+**ISMIR / TISMIR——優先掃這個。** 全部免費，Gold Open Access，PDF 直接下載，
+沒有付費牆也不需要機構帳號。這是唯一可以無條件讀全文的來源，所以優先度最高。
+
+- 會議論文集：https://ismir.net/conferences/ ，論文寄存在 Zenodo 的 ISMIR 社群
+- 期刊：https://transactions.ismir.net/
+
+**ICASSP——看時機。** 收在 IEEE Xplore，平常要付費，但有兩個免費管道：
+
+- **Open Preview**：會議開始前 30 天到會議結束期間，該屆全部論文免費下載。
+  ICASSP 通常在四月左右，所以三月中到四月底那段時間值得特別去掃一輪。
+- **OJ-SP 管道**：走 IEEE Open Journal of Signal Processing 發表的那些屬於
+  Gold OA，永久免費：https://ieee-ojsp.org/
+
+**IEEE 期刊——分兩種。** TASLP（IEEE/ACM Transactions on Audio, Speech, and
+Language Processing）是頂級期刊但要機構訂閱，抓不到全文。IEEE Access 和各領域的
+Open Journal 是完全開放的，抓得到。
+
+**ACM（Multimedia、SIGIR）——部分免費。** https://dl.acm.org/ ，ACM 正在往
+完全開放獲取轉型，較新的論文很多已經開放，舊的常規期刊文章多半還要機構權限。
+
+**抓不到全文就不要假裝。** 這幾個來源大部分只拿得到摘要，那就把 `fulltext_read`
+設成 `false`，網站會標示「僅摘要層級」。**寧可讓當天三篇全部來自 arXiv，也不要為了
+來源多樣性而塞一篇只讀過摘要的進去。** 期刊掃描是加分項，不是配額。
+
 關注的子領域，對應到 JSON 的 `subfield` 欄位：
 
 | subfield | 範圍 |
@@ -149,7 +178,6 @@ CI 紅燈代表資料進去了但網站沒更新。資料在 `main` 上不會弄
 
 以下幾項刻意留白，等實際跑一兩週看結果再決定，現階段不用處理：
 
-- 每週掃一次 IEEE、ACM、ISMIR、TASLP（不是每日更新且有付費牆，只有概念）
 - 挑選偏誤要不要用輪流覆蓋子領域之類的規則去平衡
 - 資料超過三十天後改成增量更新（現在每次全量重建）
 
