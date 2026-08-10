@@ -16,12 +16,19 @@ Per-day JSON schema:
   "date": "2026-08-05",
   "entries": [
     {
-      "arxiv_id": "2607.16657",
+      "arxiv_id": "2607.16657",     # unique id used for dedup; for non-arXiv sources
+                                     # put the DOI or other stable id here instead
       "title_en": "...", "title_zh": "...",
       "authors": "...", "submitted": "2026-07-18", "categories": "cs.SD",
       "subfield": "generative|representation|transcription|retrieval|cluster|other",
       "deep": true,                 # novel architecture/technique -> deep dive badge
       "fulltext_read": true,        # false => analysis is abstract-level only
+      "source_url": "https://transactions.ismir.net/...",  # optional: set for
+                                     # non-arXiv papers (e.g. TISMIR/ISMIR/ACM DOI
+                                     # pages) so the card links to the real page
+                                     # instead of a nonexistent arxiv.org URL
+      "source_label": "DOI",        # optional: id prefix shown next to arxiv_id
+                                     # when source_url is set (default "ID")
       "why_zh": "...", "why_en": "...",
       "sections": {
         "motivation": {"zh": "...", "en": "..."},
@@ -102,6 +109,8 @@ def load_days(data_dir):
 def render_entry(e):
     sf = SUBFIELDS.get(e.get("subfield", "other"), SUBFIELDS["other"])
     aid = e.get("arxiv_id", "")
+    src_url = e.get("source_url")  # set for non-arXiv sources (e.g. TISMIR DOI pages)
+    id_label = "arXiv" if not src_url else e.get("source_label", "ID")
     deep = bool(e.get("deep"))
     # Everything visible on the card is searchable, the why line included --
     # it is prose the reader can see, so leaving it out makes search lie.
@@ -137,18 +146,29 @@ def render_entry(e):
                '<span class="en-only"><b>Why this one:</b> %s</span></div>'
                % (esc(e.get("why_zh", "")), esc(e.get("why_en", ""))))
 
+    if src_url:
+        links = ('<a href="%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">source</a>'
+                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" rel="noopener" '
+                 'onclick="event.stopPropagation()">cited by</a>') % (esc(src_url), esc(aid))
+    else:
+        links = ('<a href="https://arxiv.org/abs/%s" target="_blank" rel="noopener" '
+                 'onclick="event.stopPropagation()">abs</a>'
+                 '<a href="https://arxiv.org/pdf/%s" target="_blank" rel="noopener" '
+                 'onclick="event.stopPropagation()">pdf</a>'
+                 '<a href="https://arxiv.org/html/%s" target="_blank" rel="noopener" '
+                 'onclick="event.stopPropagation()">html</a>'
+                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" rel="noopener" '
+                 'onclick="event.stopPropagation()">cited by</a>') % (esc(aid), esc(aid), esc(aid), esc(aid))
+
     return """<article class="card%s" data-subfield="%s" data-deep="%s" data-search="%s">
   <header class="card-head" onclick="togglePaper(this)">
     <div class="tags">%s</div>
     <h3 class="t-en">%s</h3>
     <h3 class="t-zh zh-only">%s</h3>
     <div class="meta">%s</div>
-    <div class="meta mono">arXiv:%s &middot; %s &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> %s</div>
+    <div class="meta mono">%s:%s &middot; %s &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> %s</div>
     <div class="links">
-      <a href="https://arxiv.org/abs/%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">abs</a>
-      <a href="https://arxiv.org/pdf/%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">pdf</a>
-      <a href="https://arxiv.org/html/%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">html</a>
-      <a href="https://www.semanticscholar.org/search?q=%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">cited by</a>
+      %s
     </div>
     <span class="chev" aria-hidden="true"></span>
   </header>
@@ -159,8 +179,8 @@ def render_entry(e):
 </article>""" % (
         " is-deep" if deep else "", esc(e.get("subfield", "other")), "1" if deep else "0",
         esc(search_blob), "".join(badges), esc(e.get("title_en", "")), esc(e.get("title_zh", "")),
-        esc(e.get("authors", "")), esc(aid), esc(e.get("categories", "")), esc(e.get("submitted", "")),
-        esc(aid), esc(aid), esc(aid), esc(aid), why, "".join(secs),
+        esc(e.get("authors", "")), esc(id_label), esc(aid), esc(e.get("categories", "")), esc(e.get("submitted", "")),
+        links, why, "".join(secs),
     )
 
 
