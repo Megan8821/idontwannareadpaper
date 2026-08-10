@@ -101,6 +101,12 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     check("archive index lists months", pg.locator("li a").count() > 0)
 
+    # A finished month never grows again, so the freshness banner must not
+    # appear there -- it would report every past month as broken.
+    pg.goto(BASE + href)
+    pg.wait_for_timeout(200)
+    check("no stale banner on archive pages", pg.locator("#stale").count() == 0)
+
     # The freshness banner is the only thing that reports a broken daily run,
     # so drive it at both a fresh and a stale date rather than trusting whatever
     # the current data happens to produce.

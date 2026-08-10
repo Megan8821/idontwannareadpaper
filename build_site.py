@@ -103,9 +103,11 @@ def render_entry(e):
     sf = SUBFIELDS.get(e.get("subfield", "other"), SUBFIELDS["other"])
     aid = e.get("arxiv_id", "")
     deep = bool(e.get("deep"))
+    # Everything visible on the card is searchable, the why line included --
+    # it is prose the reader can see, so leaving it out makes search lie.
     search_blob = " ".join([
         e.get("title_en", ""), e.get("title_zh", ""), e.get("authors", ""),
-        aid, sf["zh"], sf["en"],
+        aid, sf["zh"], sf["en"], e.get("why_zh", ""), e.get("why_en", ""),
         *[v.get(k, "") for v in e.get("sections", {}).values() for k in ("zh", "en")],
     ]).lower()
 
@@ -162,8 +164,13 @@ def render_entry(e):
     )
 
 
-def build_page(days, subtitle_zh, subtitle_en, nav_html, depth=0):
-    """days: {date: [entries]} -> full HTML document."""
+def build_page(days, subtitle_zh, subtitle_en, nav_html, show_stale=False):
+    """days: {date: [entries]} -> full HTML document.
+
+    show_stale belongs to the index only. A monthly archive stops growing once
+    its month ends, so a freshness banner there would report every finished
+    month as broken.
+    """
     dates = sorted(days.keys(), reverse=True)
     entries = [e for d in dates for e in days[d]]
 
@@ -183,11 +190,14 @@ def build_page(days, subtitle_zh, subtitle_en, nav_html, depth=0):
         for k, v in SUBFIELDS.items() if any(e.get("subfield") == k for e in entries)
     )
 
+    stale = ('<div class="stale" id="stale" data-latest="%s" hidden></div>' % esc(latest)
+             if show_stale else "")
+
     out = TEMPLATE
     for k, v in {
         "subtitle_zh": subtitle_zh, "subtitle_en": subtitle_en, "nav": nav_html,
         "n_papers": str(len(entries)), "n_days": str(len(dates)), "n_deep": str(n_deep),
-        "latest": esc(latest), "chips": chips, "days": "\n".join(blocks),
+        "latest": esc(latest), "chips": chips, "stale": stale, "days": "\n".join(blocks),
     }.items():
         out = out.replace("{{%s}}" % k, v)
     return out
@@ -288,7 +298,7 @@ TEMPLATE = """<!DOCTYPE html>
   </header>
   <nav class="site">{{nav}}</nav>
 
-  <div class="stale" id="stale" data-latest="{{latest}}" hidden></div>
+  {{stale}}
 
   <div class="stats">
     <div class="stat"><b>{{n_papers}}</b><span class="zh-only">論文</span><span class="en-only">papers</span></div>
@@ -393,6 +403,22 @@ def main():
         sys.stderr.write("no data files found in %s\n" % data_dir)
         return 1
 
+    # The whole premise is three papers nobody has read yet, deduplicated by
+    # arXiv ID. Nothing else enforces that, so a repeat fails the build rather
+    # than quietly shipping the same paper twice.
+    seen = {}
+    repeats = []
+    for date in sorted(days):
+        for e in days[date]:
+            aid = e.get("arxiv_id", "")
+            if aid and aid in seen:
+                repeats.append("%s appears on %s and again on %s" % (aid, seen[aid], date))
+            elif aid:
+                seen[aid] = date
+    if repeats:
+        sys.stderr.write("duplicate papers:\n  %s\n" % "\n  ".join(repeats))
+        return 1
+
     all_dates = sorted(days.keys(), reverse=True)
     months = sorted({d[:7] for d in all_dates}, reverse=True)
 
@@ -408,7 +434,7 @@ def main():
         recent,
         "音樂資訊檢索每日論文摘要 · 為 megan 整理 · 每篇含動機、背景、方法、限制、討論",
         "Music Information Retrieval daily digest · curated for megan · motivation, intro, method, limitations, discussion",
-        " ".join(nav))
+        " ".join(nav), show_stale=True)
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html)
 
