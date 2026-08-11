@@ -63,7 +63,36 @@ with sync_playwright() as p:
 
     pg.click("#langBtn"); pg.wait_for_timeout(150)
     check("lang toggle -> en", pg.locator(".body.en-only").first.is_visible())
+    # The root lang attribute has to follow the toggle, or a screen reader keeps
+    # reading English prose with a Chinese voice.
+    check("lang toggle updates root lang",
+          pg.get_attribute("html", "lang") == "en", pg.get_attribute("html", "lang"))
     pg.click("#langBtn"); pg.wait_for_timeout(150)
+    check("lang toggle back to zh", pg.get_attribute("html", "lang") == "zh-Hant",
+          pg.get_attribute("html", "lang"))
+
+    # The whole analysis is reachable only by expanding a card, so the card
+    # headers must be operable without a mouse.
+    head = pg.locator(".card-head").nth(1)
+    was_open = "open" in (pg.locator(".card").nth(1).get_attribute("class") or "")
+    head.focus()
+    pg.keyboard.press("Enter"); pg.wait_for_timeout(150)
+    now_open = "open" in (pg.locator(".card").nth(1).get_attribute("class") or "")
+    check("card toggles by keyboard", now_open != was_open, "%s -> %s" % (was_open, now_open))
+    check("aria-expanded tracks the card",
+          head.get_attribute("aria-expanded") == ("true" if now_open else "false"),
+          head.get_attribute("aria-expanded"))
+    pg.keyboard.press("Enter"); pg.wait_for_timeout(150)
+
+    # Long-form prose held to a readable column rather than the full card width.
+    measure = pg.evaluate(
+        """() => {
+             const b = document.querySelector('.card.open .sec .body:not([hidden])');
+             const card = document.querySelector('.card.open');
+             return b ? {text: b.clientWidth, card: card.clientWidth} : null;
+           }""")
+    check("prose is held to a column",
+          measure and measure["text"] < 720 and measure["text"] < measure["card"], measure)
 
     # Read the identifier off the card rather than assuming it is an arXiv one --
     # non-arXiv sources (TISMIR and friends) are labelled "DOI:", and a hardcoded

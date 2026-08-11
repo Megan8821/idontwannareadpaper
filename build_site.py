@@ -162,32 +162,35 @@ def render_entry(e):
                '<span class="en-only"><b>Why this one:</b> %s</span></div>'
                % (esc(e.get("why_zh", "")), esc(e.get("why_en", ""))))
 
+    # The links sit outside the clickable header, so the header can be a real
+    # keyboard control without interactive elements nested inside it -- which is
+    # also what retires the stopPropagation on every link.
     if src_url:
-        links = ('<a href="%s" target="_blank" rel="noopener" onclick="event.stopPropagation()">source</a>'
-                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" rel="noopener" '
-                 'onclick="event.stopPropagation()">cited by</a>') % (esc(src_url), esc(aid))
+        links = ('<a href="%s" target="_blank" rel="noopener">source</a>'
+                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" '
+                 'rel="noopener">cited by</a>') % (esc(src_url), esc(aid))
     else:
-        links = ('<a href="https://arxiv.org/abs/%s" target="_blank" rel="noopener" '
-                 'onclick="event.stopPropagation()">abs</a>'
-                 '<a href="https://arxiv.org/pdf/%s" target="_blank" rel="noopener" '
-                 'onclick="event.stopPropagation()">pdf</a>'
-                 '<a href="https://arxiv.org/html/%s" target="_blank" rel="noopener" '
-                 'onclick="event.stopPropagation()">html</a>'
-                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" rel="noopener" '
-                 'onclick="event.stopPropagation()">cited by</a>') % (esc(aid), esc(aid), esc(aid), esc(aid))
+        links = ('<a href="https://arxiv.org/abs/%s" target="_blank" rel="noopener">abs</a>'
+                 '<a href="https://arxiv.org/pdf/%s" target="_blank" rel="noopener">pdf</a>'
+                 '<a href="https://arxiv.org/html/%s" target="_blank" rel="noopener">html</a>'
+                 '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" '
+                 'rel="noopener">cited by</a>') % (esc(aid), esc(aid), esc(aid), esc(aid))
 
     return """<article class="card%s" data-subfield="%s" data-deep="%s" data-search="%s">
-  <header class="card-head" onclick="togglePaper(this)">
+  <header class="card-head" role="button" tabindex="0" aria-expanded="false"
+          onclick="togglePaper(this)" onkeydown="cardKey(event, this)">
     <div class="tags">%s</div>
-    <h3 class="t-en">%s</h3>
-    <h3 class="t-zh zh-only">%s</h3>
+    <div class="titles">
+      <h3 class="t-en">%s</h3>
+      <h3 class="t-zh zh-only">%s</h3>
+    </div>
     <div class="meta">%s</div>
     <div class="meta mono">%s:%s &middot; %s &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> %s</div>
-    <div class="links">
-      %s
-    </div>
     <span class="chev" aria-hidden="true"></span>
   </header>
+  <div class="card-links">
+    %s
+  </div>
   <div class="card-body">
     %s
     %s
@@ -235,7 +238,7 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
         for k, v in SUBFIELDS.items() if any(e.get("subfield") == k for e in entries)
     )
 
-    stale = ('<div class="stale" id="stale" data-latest="%s" hidden></div>' % esc(latest)
+    stale = ('<div class="stale" id="stale" role="status" data-latest="%s" hidden></div>' % esc(latest)
              if show_stale else "")
 
     out = TEMPLATE
@@ -257,86 +260,119 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MIR Daily Paper Digest</title>
 <style>
-  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1a1a1a; --ink2:#5b5b5b; --line:#e3e3df;
-    --accent:#8c5a2b; --deep:#b45309; --warn:#a16207; --shadow:0 1px 3px rgba(0,0,0,.06); }
+  /* Neutrals are warmed toward the brown accent rather than left pure grey, so
+     the greys and the accent read as one set. Both themes define every token;
+     no component reaches for a literal colour. */
+  :root { --bg:#f6f5f2; --panel:#fffefc; --ink:#191714; --ink2:#615b52; --line:#e4e0d8;
+    --accent:#8a5423; --deep:#b45309; --warn:#8a6410; --shadow:0 1px 3px rgba(60,45,25,.07);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    /* Latin paper titles only. A journal-ish serif that ships with the OS --
+       the page must stay self-contained, and a CJK webfont would be megabytes,
+       so the pairing comes from stacks rather than downloads. */
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Times New Roman",Georgia,serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --fs-xs:.75rem; --fs-sm:.8125rem; --fs-md:.9375rem; --fs-base:1rem;
+    --fs-lg:1.1875rem; --fs-xl:1.5rem;
+    --measure:68ch; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#141414; --panel:#1c1c1c; --ink:#ececec; --ink2:#a0a0a0; --line:#2e2e2e;
-      --accent:#d4a373; --deep:#f0b429; --warn:#d4a017; --shadow:none; } }
+    :root { --bg:#131211; --panel:#1c1a18; --ink:#ecebe7; --ink2:#9d968b; --line:#302d29;
+      --accent:#d9a86f; --deep:#f0b429; --warn:#d2a63f; --shadow:none; }
+    /* The subfield hues are picked to sit on paper. Lifting them as a set keeps
+       them legible on a dark ground without maintaining a second palette. */
+    .tag { background:color-mix(in srgb, var(--tag,#475569) 78%, #fff); }
+    .dot { background:color-mix(in srgb, var(--tag) 78%, #fff); } }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
-  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 96px; }
-  header.top h1 { font-size:1.6rem; margin:0 0 6px; letter-spacing:-.01em; }
-  header.top .sub { color:var(--ink2); font-size:.92rem; margin-bottom:14px; }
-  nav.site { font-size:.84rem; margin-bottom:18px; display:flex; gap:14px; flex-wrap:wrap; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:var(--fs-base)/1.7 var(--sans); }
+  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 96px;
+    display:flex; flex-direction:column; gap:18px; }
+  header.top { display:flex; flex-direction:column; gap:6px; }
+  header.top h1 { font-size:var(--fs-xl); margin:0; letter-spacing:-.015em; text-wrap:balance; }
+  header.top .sub { color:var(--ink2); font-size:var(--fs-md); max-width:var(--measure); }
+  nav.site { font-size:var(--fs-sm); display:flex; gap:14px; flex-wrap:wrap; }
   nav.site a { color:var(--accent); text-decoration:none;
     border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
   nav.site a:hover { border-bottom-color:var(--accent); }
   nav.site .here { color:var(--ink2); border:0; }
   /* Shown only when the newest entry is behind today -- the site reporting on
      its own freshness, so a run that dies without pushing is still visible. */
-  .stale { padding:12px 16px; margin-bottom:18px; border-radius:10px; font-size:.9rem;
+  .stale { padding:12px 16px; border-radius:10px; font-size:var(--fs-md);
     background:color-mix(in srgb, var(--warn) 12%, var(--panel));
     border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
   .stale b { color:var(--warn); }
   .stats { display:flex; gap:26px; flex-wrap:wrap; padding:14px 18px; background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); margin-bottom:18px; }
-  .stat b { display:block; font-size:1.35rem; line-height:1.2; }
-  .stat span { font-size:.76rem; color:var(--ink2); text-transform:uppercase; letter-spacing:.06em; }
+    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
+  .stat b { display:block; font-size:var(--fs-lg); line-height:1.2; font-variant-numeric:tabular-nums; }
+  .stat span { font-size:var(--fs-xs); color:var(--ink2); text-transform:uppercase; letter-spacing:.06em; }
   .controls { position:sticky; top:0; z-index:10; background:var(--bg); padding:12px 0 14px;
-    border-bottom:1px solid var(--line); margin-bottom:22px; }
-  input[type=search] { width:100%; padding:11px 14px; font-size:.95rem; color:var(--ink);
-    background:var(--panel); border:1px solid var(--line); border-radius:8px; }
-  input[type=search]:focus { outline:2px solid var(--accent); outline-offset:1px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
-  .chip, .toggle { font:inherit; font-size:.82rem; color:var(--ink2); cursor:pointer; background:var(--panel);
+    border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:10px; }
+  input[type=search] { width:100%; padding:11px 14px; font-size:var(--fs-md); color:var(--ink);
+    font-family:var(--sans); background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chip, .toggle { font:inherit; font-size:var(--fs-sm); color:var(--ink2); cursor:pointer; background:var(--panel);
     border:1px solid var(--line); border-radius:999px; padding:5px 12px; display:inline-flex; align-items:center; gap:6px; }
   .chip[aria-pressed=true], .toggle[aria-pressed=true] { color:var(--ink); border-color:var(--accent);
     box-shadow:inset 0 0 0 1px var(--accent); }
+  /* One visible focus treatment for every control, including the card headers,
+     which are keyboard-operable and previously showed nothing at all. */
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--tag); }
-  .group { margin-bottom:34px; }
-  .group-head { display:flex; align-items:baseline; gap:12px; font-size:1rem; font-weight:600;
-    padding-bottom:8px; border-bottom:2px solid var(--line); margin:0 0 14px; }
-  .group-head .count { font-weight:400; font-size:.82rem; color:var(--ink2); }
-  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #list { display:flex; flex-direction:column; gap:34px; }
+  .group { display:flex; flex-direction:column; gap:14px; }
+  .group-head { display:flex; align-items:baseline; gap:12px; font-size:var(--fs-base); font-weight:600;
+    padding-bottom:8px; border-bottom:2px solid var(--line); margin:0; }
+  .group-head .label { font-variant-numeric:tabular-nums; }
+  .group-head .count { font-weight:400; font-size:var(--fs-sm); color:var(--ink2); font-family:var(--sans); }
+  .mono { font-family:var(--mono); }
   .card { background:var(--panel); border:1px solid var(--line); border-left:3px solid transparent;
-    border-radius:10px; box-shadow:var(--shadow); margin-bottom:14px; overflow:hidden; }
+    border-radius:10px; box-shadow:var(--shadow); overflow:hidden; }
   .card.is-deep { border-left-color:var(--deep); }
-  .card-head { padding:16px 44px 16px 18px; cursor:pointer; position:relative; }
+  .card-head { padding:16px 44px 16px 18px; cursor:pointer; position:relative;
+    display:flex; flex-direction:column; gap:7px; }
   .card-head:hover { background:color-mix(in srgb, var(--panel) 92%, var(--accent)); }
-  .tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
-  .tag { font-size:.7rem; letter-spacing:.03em; text-transform:uppercase; padding:3px 8px; border-radius:4px;
-    color:#fff; background:var(--tag,#475569); }
+  .tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-size:var(--fs-xs); letter-spacing:.03em; text-transform:uppercase; padding:3px 8px;
+    border-radius:4px; color:#fff; background:var(--tag,#475569); }
   .tag.deep { background:var(--deep); }
   .tag.warn { background:var(--warn); }
   .tag.date-tag { background:transparent; color:var(--ink2); border:1px solid var(--line);
-    text-transform:none; letter-spacing:0; }
-  .card h3 { margin:0 0 3px; font-size:1.04rem; line-height:1.45; font-weight:650; }
-  .card h3.t-zh { font-size:.95rem; font-weight:500; color:var(--ink2); }
-  .meta { font-size:.8rem; color:var(--ink2); }
-  .links { margin-top:9px; display:flex; gap:12px; }
-  .links a { font-size:.78rem; color:var(--accent); text-decoration:none;
+    text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  .titles { display:flex; flex-direction:column; gap:3px; }
+  /* The serif is the English title's alone; the Chinese title stays in the sans
+     stack, where the installed CJK face is the one that actually renders well. */
+  .card h3 { margin:0; font-size:var(--fs-lg); line-height:1.4; font-weight:600;
+    font-family:var(--serif); text-wrap:balance; max-width:var(--measure); }
+  .card h3.t-zh { font-size:var(--fs-md); font-weight:500; color:var(--ink2);
+    font-family:var(--sans); line-height:1.55; }
+  .meta { font-size:var(--fs-sm); color:var(--ink2); }
+  .meta.mono { font-variant-numeric:tabular-nums; }
+  .card-links { display:flex; gap:12px; padding:0 18px 14px; }
+  .card-links a { font-size:var(--fs-sm); color:var(--accent); text-decoration:none;
     border-bottom:1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
-  .links a:hover { border-bottom-color:var(--accent); }
+  .card-links a:hover { border-bottom-color:var(--accent); }
   .chev { position:absolute; right:18px; top:20px; width:9px; height:9px; border-right:2px solid var(--ink2);
     border-bottom:2px solid var(--ink2); transform:rotate(45deg); transition:transform .18s; }
   .card.open .chev { transform:rotate(-135deg); }
   .card-body { display:none; padding:0 18px 18px; border-top:1px solid var(--line); }
-  .card.open .card-body { display:block; }
-  .why { font-size:.86rem; color:var(--ink2); background:color-mix(in srgb, var(--panel) 88%, var(--accent));
-    border-radius:8px; padding:10px 13px; margin:16px 0 4px; }
-  .sec { margin-top:18px; }
-  .sec h4 { margin:0 0 6px; font-size:.78rem; letter-spacing:.08em; text-transform:uppercase;
+  .card.open .card-body { display:flex; flex-direction:column; gap:18px; }
+  .why { font-size:var(--fs-md); color:var(--ink2); background:color-mix(in srgb, var(--panel) 88%, var(--accent));
+    border-radius:8px; padding:10px 13px; margin:16px 0 0; max-width:var(--measure); }
+  .sec { display:flex; flex-direction:column; gap:6px; }
+  .sec h4 { margin:0; font-size:var(--fs-xs); letter-spacing:.08em; text-transform:uppercase;
     color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:4px; }
+  /* The analysis is long-form reading, so it is held to a column rather than
+     spanning the full card -- 920px of 16px text is over 100 characters a line. */
+  .sec .body { max-width:var(--measure); }
   .sec .body p { margin:.55em 0; }
-  .sec code { font-family:ui-monospace,Menlo,monospace; font-size:.88em;
+  .sec code { font-family:var(--mono); font-size:.88em;
     background:color-mix(in srgb, var(--panel) 84%, var(--ink2)); padding:1px 5px; border-radius:4px; }
   .body.en-only { color:var(--ink2); }
   body.lang-zh .en-only { display:none; }
   body.lang-en .zh-only { display:none; }
   .empty { display:none; text-align:center; color:var(--ink2); padding:60px 0; }
   body.no-results .empty { display:block; }
-  footer { margin-top:50px; padding-top:18px; border-top:1px solid var(--line); font-size:.78rem; color:var(--ink2); }
+  footer { margin-top:32px; padding-top:18px; border-top:1px solid var(--line);
+    font-size:var(--fs-sm); color:var(--ink2); max-width:var(--measure); }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body class="lang-zh">
@@ -357,7 +393,8 @@ TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="controls">
-    <input type="search" id="q" placeholder="搜尋標題、作者、方法、arXiv ID…  /  search title, author, method, arXiv ID…"
+    <input type="search" id="q" aria-label="搜尋論文 / Search papers"
+           placeholder="搜尋標題、作者、方法、日期、arXiv ID…  /  search title, author, method, date, arXiv ID…"
            oninput="applyFilters()" autocomplete="off">
     <div class="row">
       {{chips}}
@@ -404,9 +441,37 @@ TEMPLATE = """<!DOCTYPE html>
   updateStale();
 
   var filters = new Set(); var deepOnly = false;
-  function togglePaper(head) { head.parentElement.classList.toggle('open'); }
-  function setAll(open) { document.querySelectorAll('.card').forEach(function (c) { c.classList.toggle('open', open); }); }
-  function toggleLang() { document.body.classList.toggle('lang-zh'); document.body.classList.toggle('lang-en'); }
+  // aria-expanded has to follow the class, or a screen reader is told every card
+  // is collapsed no matter what is on screen.
+  function syncCard(card) {
+    var head = card.querySelector('.card-head');
+    if (head) head.setAttribute('aria-expanded', card.classList.contains('open') ? 'true' : 'false');
+  }
+  function togglePaper(head) {
+    var card = head.parentElement;
+    card.classList.toggle('open');
+    syncCard(card);
+  }
+  // The header is a div with role=button, so Enter and Space do not activate it
+  // for free the way they would on a real button.
+  function cardKey(ev, head) {
+    if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+      ev.preventDefault();
+      togglePaper(head);
+    }
+  }
+  function setAll(open) {
+    document.querySelectorAll('.card').forEach(function (c) {
+      c.classList.toggle('open', open);
+      syncCard(c);
+    });
+  }
+  function toggleLang() {
+    document.body.classList.toggle('lang-zh');
+    document.body.classList.toggle('lang-en');
+    // Tell assistive tech and the hyphenator which language is actually showing.
+    document.documentElement.lang = document.body.classList.contains('lang-en') ? 'en' : 'zh-Hant';
+  }
   function toggleFilter(btn) {
     var k = btn.dataset.f, on = btn.getAttribute('aria-pressed') === 'true';
     btn.setAttribute('aria-pressed', on ? 'false' : 'true');
@@ -442,7 +507,10 @@ TEMPLATE = """<!DOCTYPE html>
   var list = document.getElementById('list');
   if (list && list.dataset.expandFirst === '1') {
     var firstGroup = list.querySelector('.group');
-    if (firstGroup) firstGroup.querySelectorAll('.card').forEach(function (c) { c.classList.add('open'); });
+    if (firstGroup) firstGroup.querySelectorAll('.card').forEach(function (c) {
+      c.classList.add('open');
+      syncCard(c);
+    });
   }
 </script>
 </body>
@@ -490,14 +558,21 @@ def main():
     os.makedirs(os.path.join(out_dir, "topics"), exist_ok=True)
 
     def topic_nav(current=None):
-        """Nav shared by both page types; `current` marks the page you are on."""
+        """Nav shared by both page types; `current` marks the page you are on.
+
+        Labels follow the page's language toggle instead of printing both at
+        once -- six bilingual topic names wrap the nav onto three lines.
+        """
         prefix = "" if current is None else "../"
-        out = ['<span class="here">最新 / Latest</span>' if current is None
-               else '<a href="../index.html">← 最新 / Latest</a>']
+        home = ('<span class="zh-only">最新</span><span class="en-only">Latest</span>' if current is None
+                else '<span class="zh-only">← 最新</span><span class="en-only">← Latest</span>')
+        out = ['<span class="here">%s</span>' % home if current is None
+               else '<a href="../index.html">%s</a>' % home]
         for k in topics:
-            label = "%s / %s" % (SUBFIELDS[k]["zh"], SUBFIELDS[k]["en"])
-            out.append('<span class="here">%s</span>' % esc(label) if k == current
-                       else '<a href="%stopics/%s.html">%s</a>' % (prefix, k, esc(label)))
+            label = ('<span class="zh-only">%s</span><span class="en-only">%s</span>'
+                     % (esc(SUBFIELDS[k]["zh"]), esc(SUBFIELDS[k]["en"])))
+            out.append('<span class="here">%s</span>' % label if k == current
+                       else '<a href="%stopics/%s.html">%s</a>' % (prefix, k, label))
         return " ".join(out)
 
     # index.html -- the latest day only
@@ -535,10 +610,14 @@ def main():
     with open(os.path.join(out_dir, "topics", "index.html"), "w", encoding="utf-8") as f:
         f.write("""<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Topics · MIR Daily Paper Digest</title>
-<style>body{margin:0;background:#f7f7f5;color:#1a1a1a;font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
-@media(prefers-color-scheme:dark){body{background:#141414;color:#ececec}}
-.wrap{max-width:640px;margin:0 auto;padding:40px 20px}a{color:#8c5a2b}
-@media(prefers-color-scheme:dark){a{color:#d4a373}}ul{padding-left:1.2em}li{margin:.4em 0}</style></head>
+<style>:root{--bg:#f6f5f2;--ink:#191714;--accent:#8a5423;--line:#e4e0d8}
+@media(prefers-color-scheme:dark){:root{--bg:#131211;--ink:#ecebe7;--accent:#d9a86f;--line:#302d29}}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:40px 20px}
+h1{font-size:1.5rem;letter-spacing:-.015em;margin:0 0 1rem}
+a{color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+ul{padding-left:1.2em}li{margin:.4em 0;border-bottom:1px solid var(--line);padding-bottom:.4em}</style></head>
 <body><div class="wrap"><h1>主題 / Topics</h1>
 <p><a href="../index.html">← 回到最新 / back to latest</a></p><ul>%s</ul></div></body></html>""" % rows)
 
