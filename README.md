@@ -7,13 +7,17 @@
 ## 這裡有什麼
 
 ```
-index.html            最近 60 天的論文（主頁）
-archive/YYYY-MM.html  按月封存
-archive/index.html    月份列表
+index.html            當天的三篇（主頁）
+topics/<子領域>.html   該子領域讀過的全部論文，由新到舊
+topics/index.html     子領域列表
 data/YYYY-MM-DD.json  每天的原始資料 ← 真正的資料庫在這裡
 build_site.py         從 data/ 產生所有 HTML
 .nojekyll             告訴 GitHub Pages 不要跑 Jekyll
 ```
+
+主頁只放當天，因為依日期瀏覽撐不住：累積一年就是 365 個日期標題要滑過去，
+而子領域固定就那六個。過了今天的論文一律從主題頁進去找，
+要回到某一天則用搜尋框打那天的日期（例如 `2026-08-10`）。
 
 整個網站是純靜態的：沒有後端、沒有資料庫伺服器、沒有外部 CSS 或 JS。
 每個 HTML 都是自足的單一檔案，離線也能開，十年後也不會壞。
@@ -52,7 +56,8 @@ python3 build_site.py data .
 不需要任何套件，Python 3 標準函式庫就夠。所有 HTML 會重新產生一次，
 過去的論文不用重新分析——分析結果都存在 `data/` 裡。
 
-**改主頁顯示天數**：`build_site.py` 開頭的 `RECENT_DAYS`。
+**改子領域**：`build_site.py` 開頭的 `SUBFIELDS`。加一個子領域就會多一個主題頁與一個導覽連結；
+沒有任何論文的子領域不會產生頁面。
 
 **加一天**：在 `data/` 放一個新的 JSON（格式見 `build_site.py` 開頭的說明），重跑一次就好。
 

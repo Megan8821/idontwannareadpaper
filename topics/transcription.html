@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIR Daily Paper Digest</title>
+<style>
+  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1a1a1a; --ink2:#5b5b5b; --line:#e3e3df;
+    --accent:#8c5a2b; --deep:#b45309; --warn:#a16207; --shadow:0 1px 3px rgba(0,0,0,.06); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141414; --panel:#1c1c1c; --ink:#ececec; --ink2:#a0a0a0; --line:#2e2e2e;
+      --accent:#d4a373; --deep:#f0b429; --warn:#d4a017; --shadow:none; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 96px; }
+  header.top h1 { font-size:1.6rem; margin:0 0 6px; letter-spacing:-.01em; }
+  header.top .sub { color:var(--ink2); font-size:.92rem; margin-bottom:14px; }
+  nav.site { font-size:.84rem; margin-bottom:18px; display:flex; gap:14px; flex-wrap:wrap; }
+  nav.site a { color:var(--accent); text-decoration:none;
+    border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  nav.site a:hover { border-bottom-color:var(--accent); }
+  nav.site .here { color:var(--ink2); border:0; }
+  /* Shown only when the newest entry is behind today -- the site reporting on
+     its own freshness, so a run that dies without pushing is still visible. */
+  .stale { padding:12px 16px; margin-bottom:18px; border-radius:10px; font-size:.9rem;
+    background:color-mix(in srgb, var(--warn) 12%, var(--panel));
+    border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .stale b { color:var(--warn); }
+  .stats { display:flex; gap:26px; flex-wrap:wrap; padding:14px 18px; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .stat b { display:block; font-size:1.35rem; line-height:1.2; }
+  .stat span { font-size:.76rem; color:var(--ink2); text-transform:uppercase; letter-spacing:.06em; }
+  .controls { position:sticky; top:0; z-index:10; background:var(--bg); padding:12px 0 14px;
+    border-bottom:1px solid var(--line); margin-bottom:22px; }
+  input[type=search] { width:100%; padding:11px 14px; font-size:.95rem; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  input[type=search]:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .chip, .toggle { font:inherit; font-size:.82rem; color:var(--ink2); cursor:pointer; background:var(--panel);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px; display:inline-flex; align-items:center; gap:6px; }
+  .chip[aria-pressed=true], .toggle[aria-pressed=true] { color:var(--ink); border-color:var(--accent);
+    box-shadow:inset 0 0 0 1px var(--accent); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--tag); }
+  .group { margin-bottom:34px; }
+  .group-head { display:flex; align-items:baseline; gap:12px; font-size:1rem; font-weight:600;
+    padding-bottom:8px; border-bottom:2px solid var(--line); margin:0 0 14px; }
+  .group-head .count { font-weight:400; font-size:.82rem; color:var(--ink2); }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .card { background:var(--panel); border:1px solid var(--line); border-left:3px solid transparent;
+    border-radius:10px; box-shadow:var(--shadow); margin-bottom:14px; overflow:hidden; }
+  .card.is-deep { border-left-color:var(--deep); }
+  .card-head { padding:16px 44px 16px 18px; cursor:pointer; position:relative; }
+  .card-head:hover { background:color-mix(in srgb, var(--panel) 92%, var(--accent)); }
+  .tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .tag { font-size:.7rem; letter-spacing:.03em; text-transform:uppercase; padding:3px 8px; border-radius:4px;
+    color:#fff; background:var(--tag,#475569); }
+  .tag.deep { background:var(--deep); }
+  .tag.warn { background:var(--warn); }
+  .tag.date-tag { background:transparent; color:var(--ink2); border:1px solid var(--line);
+    text-transform:none; letter-spacing:0; }
+  .card h3 { margin:0 0 3px; font-size:1.04rem; line-height:1.45; font-weight:650; }
+  .card h3.t-zh { font-size:.95rem; font-weight:500; color:var(--ink2); }
+  .meta { font-size:.8rem; color:var(--ink2); }
+  .links { margin-top:9px; display:flex; gap:12px; }
+  .links a { font-size:.78rem; color:var(--accent); text-decoration:none;
+    border-bottom:1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  .links a:hover { border-bottom-color:var(--accent); }
+  .chev { position:absolute; right:18px; top:20px; width:9px; height:9px; border-right:2px solid var(--ink2);
+    border-bottom:2px solid var(--ink2); transform:rotate(45deg); transition:transform .18s; }
+  .card.open .chev { transform:rotate(-135deg); }
+  .card-body { display:none; padding:0 18px 18px; border-top:1px solid var(--line); }
+  .card.open .card-body { display:block; }
+  .why { font-size:.86rem; color:var(--ink2); background:color-mix(in srgb, var(--panel) 88%, var(--accent));
+    border-radius:8px; padding:10px 13px; margin:16px 0 4px; }
+  .sec { margin-top:18px; }
+  .sec h4 { margin:0 0 6px; font-size:.78rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:4px; }
+  .sec .body p { margin:.55em 0; }
+  .sec code { font-family:ui-monospace,Menlo,monospace; font-size:.88em;
+    background:color-mix(in srgb, var(--panel) 84%, var(--ink2)); padding:1px 5px; border-radius:4px; }
+  .body.en-only { color:var(--ink2); }
+  body.lang-zh .en-only { display:none; }
+  body.lang-en .zh-only { display:none; }
+  .empty { display:none; text-align:center; color:var(--ink2); padding:60px 0; }
+  body.no-results .empty { display:block; }
+  footer { margin-top:50px; padding-top:18px; border-top:1px solid var(--line); font-size:.78rem; color:var(--ink2); }
+</style>
+</head>
+<body class="lang-zh">
+<div class="wrap">
+  <header class="top">
+    <h1>MIR Daily Paper Digest</h1>
+    <div class="sub"><span class="zh-only">轉譜與音高分析 · 累積 2 篇 · 由新到舊</span><span class="en-only">Transcription & Pitch · 2 papers so far · newest first</span></div>
+  </header>
+  <nav class="site"><a href="../index.html">← 最新 / Latest</a> <a href="../topics/generative.html">生成式音樂模型 / Generative Music Models</a> <a href="../topics/representation.html">音源分離與表徵學習 / Separation &amp; Representation</a> <span class="here">轉譜與音高分析 / Transcription &amp; Pitch</span> <a href="../topics/retrieval.html">檢索、推薦與情緒 / Retrieval, RecSys &amp; Emotion</a></nav>
+
+  
+
+  <div class="stats">
+    <div class="stat"><b>2</b><span class="zh-only">論文</span><span class="en-only">papers</span></div>
+    <div class="stat"><b>2</b><span class="zh-only">天數</span><span class="en-only">days</span></div>
+    <div class="stat"><b>1</b><span class="zh-only">深度分析</span><span class="en-only">deep dives</span></div>
+    <div class="stat"><b class="mono">2026-08-09</b><span class="zh-only">最新</span><span class="en-only">latest</span></div>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="搜尋標題、作者、方法、arXiv ID…  /  search title, author, method, arXiv ID…"
+           oninput="applyFilters()" autocomplete="off">
+    <div class="row">
+      <button class="chip" data-f="transcription" onclick="toggleFilter(this)"><span class="dot" style="--tag:#047857"></span><span class="zh-only">轉譜與音高分析</span><span class="en-only">Transcription &amp; Pitch</span></button>
+      <button class="toggle" id="deepOnly" aria-pressed="false" onclick="toggleDeep(this)">★
+        <span class="zh-only">只看深度分析</span><span class="en-only">deep dives only</span></button>
+      <button class="toggle" id="langBtn" onclick="toggleLang()">中 / EN</button>
+      <button class="toggle" onclick="setAll(true)"><span class="zh-only">全部展開</span><span class="en-only">expand all</span></button>
+      <button class="toggle" onclick="setAll(false)"><span class="zh-only">全部收合</span><span class="en-only">collapse all</span></button>
+    </div>
+  </div>
+
+  <div id="list">
+<div class="group">
+<h2 class="group-head"><span class="label mono zh-only">轉譜與音高分析</span><span class="label mono en-only">Transcription &amp; Pitch</span><span class="count">2 <span class="zh-only">篇</span><span class="en-only">papers</span></span></h2>
+<article class="card is-deep" data-subfield="transcription" data-deep="1" data-search="masked diffusion enables coherent beat tracking 遮罩擴散讓節拍追蹤產生前後一致的輸出 francesco foscarin, filip korzeniowski, richard vogl 2608.04624 轉譜與音高分析 transcription &amp; pitch 把「模型為什麼會吐出自相矛盾的節拍」這個老問題重新診斷成機率建模的缺陷，而不是後處理不夠強，然後用遮罩擴散給出對症的解法。三個為節拍任務量身改造的設計細節都寫得很誠實，包含哪些嘗試失敗了。 it re-diagnoses a long-standing failure of beat trackers as a probabilistic modelling defect rather than a post-processing shortfall, then answers it with masked diffusion. the three task-specific modifications are reported honestly, including the variants that did not work. 2026-08-09 神經網路節拍追蹤器會產生「不合法」的輸出：連續兩個小節線落在相鄰拍上、速度突然倍增或減半——即使訓練資料裡從來沒有這種東西。長期以來業界的處理方式是套一層動態貝氏網路（dbn）後處理，用「每小節固定幾拍」「速度變化有限」這類硬性約束把輸出掰回合理範圍。
+
+這篇的出發點是：dbn 治的是症狀，不是病因，而且病因從來沒被講清楚過。作者提出的假設是——問題出在單步前饋這個範式本身隱含了「給定輸入，只有唯一一個正確輸出」的假設。但節拍本來就有歧義：同一首曲子，不同聽者可能採用不同的節律層級（metrical level），數成 4/4 或數成 2/2 都說得通，而且都是風格上合理的解讀。當模型面對這種曲子時，它不是選一個解讀，而是把幾個互相競爭的解讀混在一起輸出，於是產生了任何單一詮釋下都不成立的東西。
+
+這個診斷有個直接的推論：既然病因是「沒有建模多個合法輸出」，那真正的解法就該是一個能表達多重詮釋、並在推論時一致地選定其中一個的模型，而不是在事後用規則把混合物擦乾淨。 neural beat trackers emit invalid outputs: consecutive downbeats on adjacent beat positions, abrupt tempo doubling or halving — none of which appear in the training data. the standard remedy has been a dynamic bayesian network (dbn) post-processor that forces the output back into shape with hard constraints such as a fixed number of beats per bar and bounded tempo variation.
+
+the paper&#x27;s starting point is that the dbn treats symptoms, and that the underlying cause has never been articulated. their hypothesis is that the fault lies in the single-forward-pass paradigm itself, which implicitly assumes exactly one valid output per input. beat tracking violates that assumption: listeners may legitimately adopt different metrical levels for the same piece, and alternative beat placements are stylistically plausible. faced with such a piece, the network does not choose an interpretation — it emits a mixture of competing ones, producing something that is coherent under none of them.
+
+the diagnosis carries a direct implication. if the cause is a failure to model multiple valid outputs, the fix should be a model that represents several interpretations and commits to one consistently at inference, not a rule-based cleanup of the mixture after the fact. 節拍與小節線追蹤已經被研究了數十年，近年的工作在架構、損失函數、資料增強、預訓練與微調上都有大量嘗試，但幾乎全部共用同一個推論範式：對每個時間框，單次前饋預測一個節拍活化值。
+
+作者盤點了「讓模型考慮多種輸出」的既有路線與各自的代價。自迴歸模型天然能建模整段輸出的聯合分布，但實作上都有麻煩：逐框自迴歸解碼需要每框一次前饋，30 秒 50 fps 就是 1500 次，推論慢到不可用；改成 [節拍類型, 節拍時間] 的緊湊 token 化雖然避開這點，但絕對時間編碼需要大量時間 token 且無法處理長片段，相對時間編碼則在生成過程中會累積誤差。
+
+先前工作裡只有 gagneré 等人正面處理過多重合法輸出的問題，他們用多個預測頭去捕捉不同的階層層級——但那只用在自監督預訓練階段，微調與推論時仍然回到單頭架構，所以最終輸出照樣有這篇要解的毛病。
+
+這篇的基底是 beat this（foscarin 等人），一個權重、訓練程式與資料全部開源的模型。作者沿用它的資料、增強方法、評估指標與大部分超參數，只把架構與損失改造成能配合遮罩擴散。遮罩擴散這邊則主要參照 llada，理由是它在訓練與推論都用線性遮罩，實作最單純。 beat and downbeat tracking has been studied for decades, with recent work exploring architectures, losses, augmentation, pre-training and fine-tuning — but nearly all of it shares one inference paradigm: a single forward pass predicting a beat activation per time frame.
+
+the authors survey the existing routes to modelling multiple outputs and the cost of each. autoregressive models capture the joint distribution over the full output sequence, but every implementation has a drawback. frame-wise autoregressive decoding needs one pass per frame — 1500 passes for 30 seconds at 50 fps — which is prohibitively slow. compact [beat-type, beat-time] tokenisation avoids that, but absolute-time encoding needs many time tokens and breaks down on longer excerpts, while relative-time encoding accumulates error during generation.
+
+among prior work, only gagneré et al. confront the multiple-valid-output problem directly, using multiple heads to capture different hierarchical levels. that idea is confined to their self-supervised pre-training stage; fine-tuning and inference revert to a single head, so their predictions still exhibit the pathology this paper targets.
+
+the base here is beat this (foscarin et al.), whose weights, training code and data are fully open. the authors reuse its data, augmentation, metrics and most hyperparameters, changing only what masked diffusion requires. for the diffusion side they follow llada, chosen because its linear masking in both training and inference makes for the simplest implementation. 核心設定是遮罩擴散模型（mdm）：把節拍序列 y 視為要被逐步遮罩與還原的對象，而音訊 x 在整個前向與反向過程中始終完全可見，也就是建模條件分布而非邊際分布。推論從全遮罩序列開始，每一步做一次前饋、揭露一部分框，直到整段填滿。這樣模型可以在早期步驟先選定一個合法的詮釋，再前後一致地把剩下的填完。
+
+作者刻意把架構改動壓到最小，好繼續沿用既有的研究成果。改動有三處：加入節拍與小節線兩張可學習的 embedding 表，詞彙為 {mask, no_event, event, pad}，在 6 層 roformer 之前才加入（前端只處理音訊），並乘上 √d 放大權重，這個簡單做法在初步實驗裡就有效；把原本的 sum head 換成兩個獨立線性頭，因為 sum head 會在小節線 logit 上製造反向尖峰，單步預測時無害，但這裡遮罩排程要靠 logit 信心度決定揭露順序，被污染的信心度會出問題；把 ffn 的 gelu 換成 swiglu，這不是必要的，只是讓設計向現代網路對齊並順帶改善結果。
+
+真正把通用 mdm 變成能用的節拍追蹤器的，是三個非顯而易見的設計決定：
+
+第一，**節拍與小節線獨立遮罩**。訓練時兩個通道各自抽自己的遮罩比例與遮罩，所以某一步可能節拍遮 30%、小節線遮 80%。這是推論時基於信心度的揭露策略能正確運作的前提——因為兩個通道的信心度必須各自校準到自己的稀疏度。作者試過各種在揭露前先合併兩通道信心度的做法，也試過先揭節拍再揭小節線或反過來，全都讓效能下降。理由是有些曲子節拍比小節線好抓（節奏穩定但拍號會變），有些反過來（縹緲的音樂但和聲在小節線上變化清楚），而且小節線大約比節拍稀疏四倍，logit 量級本來就不在同一個尺度上。
+
+第二，**平衡揭露排程**。負 logit（非事件框）天生比正 logit 更有信心，所以純粹按信心度排序會先把非事件全部揭完，造成訓練與推論的不匹配——訓練時模型看到的永遠是事件與非事件混合的脈絡。在這個設定下做迭代推論反而比單步更差。解法是每一步先計算當前遮罩框中預測的正負比例，再按這個比例把揭露預算分配給正例與負例。
+
+第三，**步間峰值挑選**。逐框網路傾向在每個真實節拍附近產生跨數框的活化叢集。原本 beat this 是在最後做一次 7 框滑動窗的非極大值抑制，但在迭代推論裡，相鄰的峰會被揭露成相鄰的 event token——這種情況訓練資料裡從未出現過（每個事件都是單一脈衝）。作者的做法是每一步推論後就做一次峰值挑選：只要有新的 event 被揭露，鄰近窗內的所有框也一併被揭露並強制設為 no_event。同時順手加上一條音樂上必然成立的規則：揭露一個小節線 event 時，同位置也揭露一個節拍 event。作者特別指出，這組規則遠比 dbn 少，而且對所有音樂都普遍成立。
+
+最後還加了模型集成：對多個模型的輸出 logit 取平均後再算信心度。神經網路本來就不擅長估計機率、傾向過度自信，平均能得到較可靠的信心度。這在節拍追蹤是成熟技術，但在 mdm 文獻裡不常見，因為大模型推論成本太高——25m 參數的模型則可以接受。 the core setup is a masked diffusion model. the beat sequence y is what gets progressively masked and recovered, while the audio x stays fully visible throughout the forward and reverse processes — the model learns a conditional distribution, not a marginal one. inference starts from a fully masked sequence and iteratively reveals frames over a handful of forward passes, so the model can commit to a valid interpretation in the early steps and then fill in the rest coherently.
+
+architectural changes are deliberately minimal, so prior work on architectures, losses and post-processing still applies. there are three. two learnable embedding tables (beats, downbeats) over the vocabulary {mask, no_event, event, pad} are added just before the 6-layer roformer — the frontend handles audio only — and scaled by √d, a simple trick that raises the weight of the beat input and proved effective in preliminary experiments. the original sum head is replaced by two independent linear heads, because the sum head sometimes produces inverted spikes in the downbeat logits; harmless for one-step prediction, but here the masking scheduler relies on logit confidence to order the reveals, and contaminated confidences break it. gelu in the ffn is swapped for swiglu — not required for the method, just alignment with modern practice that also helps results.
+
+what actually turns a generic mdm into a working beat tracker is three non-obvious choices:
+
+**independent masking of the two channels.** during training each channel draws its own masking ratio and its own mask, so a step may show 30% of beat frames masked and 80% of downbeat frames masked. this is the precondition for confidence-based unmasking to work per channel at inference. the authors tried aggregating confidences across channels before deciding what to reveal, and tried revealing beats first then downbeats and vice versa; all of it lowered performance. their explanation is that some pieces make beats easier than downbeats (stable pulse, changing time signature) and others the reverse (ethereal music with clear harmonic change at downbeats), and that downbeats are roughly four times sparser, putting the two channels&#x27; logit magnitudes on different scales.
+
+**a balanced unmasking schedule.** negative logits — non-event frames — are systematically more confident than positive ones, so pure confidence ordering reveals all the non-events first. that creates a train/inference mismatch, since during training the model always sees a balanced mix, and iterative inference in this regime performs worse than a single step. the fix computes the current positive-to-negative ratio among the masked predictions at each step and splits the unmasking budget accordingly.
+
+**peak picking between steps.** frame-wise networks spread activation across several frames near each true beat. beat this suppresses non-maxima within a 7-frame window once, at the end. under iterative inference, adjacent peaks become adjacent event tokens — a configuration that never occurs in training, where every event is a single impulse. so peak picking is applied after every inference step: whenever an event is revealed, all frames in its proximity window are also revealed and forced to no_event. the same hook enforces one musically universal rule: revealing a downbeat event also reveals a beat event at that position. the authors are explicit that this is a far smaller rule set than the dbn&#x27;s, and one that holds across all music.
+
+finally, model ensembling: output logits are averaged across models before confidence is computed. networks estimate probabilities poorly and tend to be overconfident, and averaging yields a more reliable confidence signal. ensembling is well established in beat tracking but rare in the mdm literature because of inference cost at scale — at 25m parameters the authors find it acceptable. 作者自己列出的代價很清楚：訓練時間加倍（150 epoch 增為 300），推論時間大約是單步的數倍——雖然他們指出前端只需算一次，還有優化空間。模型集成則讓這兩項成本再乘上模型數量。
+
+更根本的一個限制被作者誠實地點出來：他們讓模型能在多個合法詮釋中消歧義了，但評估指標仍然假設只有一個正確答案。amlt 部分處理了這件事（容許二分之一與二倍速），但預設設定不含三分法細分，也無法處理複雜拍號、拍號變化與本質上模稜兩可的節拍位置。換句話說，這篇最想證明的那個能力，現有指標其實測不太到。
+
+實驗設計上也有幾點值得留意。測試集是 gtzan，而 gtzan 以 3 拍與 4 拍曲子為主，只有少數拍號變化——這正好是 dbn 假設成立得最好的場景，所以「不用 dbn 也能打平」這個結論在更多樣的音樂上會如何，是外推而非實測。與 sota 系統的比較也不是嚴格的對照：gagneré 等人的程式與模型未公開，無法做更深入的評估或統計顯著性檢定；ru 等人微調的是參數量十倍以上的 musicfm。作者自己也說直接比較不是目的，只是提供脈絡。
+
+此外，訓練超參數有一部分是被硬體逼出來的：因為 gpu 限制只能用 fp16 而非 bf16 混合精度，所以必須調低學習率、加大 weight decay、加梯度裁剪，並把遮罩比例下限 ε 設得比語言 mdm 高得多（後者約 0.001）。這些不是方法本身的需求，但確實混在結果裡。 the costs the authors themselves list are clear: training time doubles (150 epochs to 300) and inference is several times slower than a single pass, though they note the frontend need only be computed once, leaving room for optimisation. ensembling multiplies both by the number of models.
+
+a deeper limitation is stated honestly: they have given the model the ability to disambiguate among valid interpretations, but the metrics still assume exactly one is correct. amlt partially accommodates this by allowing half and double tempi, but its default configuration excludes ternary subdivisions and cannot handle complex time signatures, time-signature changes, or genuinely ambiguous beat positions. the capability the paper most wants to demonstrate is the one current metrics measure least well.
+
+several aspects of the experimental design deserve attention. the test set is gtzan, which is dominated by pieces in 3 and 4 beats per bar with few time-signature changes — precisely the regime where the dbn&#x27;s assumptions hold best. so the claim that a dbn-free system can match dbn-based ones on more diverse music is an extrapolation, not a measurement. the sota comparison is not a controlled one either: gagneré et al.&#x27;s code and models are not public, precluding deeper evaluation or significance testing, and ru et al. fine-tune musicfm, a model more than ten times larger. the authors say directly that head-to-head comparison is not their objective and the numbers are context.
+
+some hyperparameters are also forced by hardware rather than by the method: gpu constraints meant fp16 rather than bf16 mixed precision, which required a lower learning rate, higher weight decay, gradient clipping, and a masking-ratio floor ε far above what language mdms use (around 0.001). these are not requirements of the approach, but they are mixed into the results. 這篇最有價值的地方不在數字，而在它示範了一種診斷方式：當模型持續產生訓練資料裡不存在的錯誤時，先問這是不是機率建模層次的問題，而不是急著加後處理。作者提出的證據鏈很有說服力——最引人注意的是，即使只用「單步」推論，mdm 訓練目標也已經勝過非擴散版本。這代表好處不只來自迭代推論，也來自訓練目標本身；作者的假設是部分遮罩的脈絡減少了「訓練混淆」，也就是當網路看到節律層級互相衝突的相似曲目時不會被逼著平均掉。
+
+連貫性的量化結果也具體：8 步推論下，每首曲子的連續小節線平均從 0.25 降到 0.02，速度倍增／減半事件從 0.75 降到 0.119（20 步時再降到 0.06）。作為對照，gtzan 標註本身是 0 與 0.033。這是直接對著病因量測，而不是只看整體 f1。
+
+更值得注意的是這個架構順帶打開的應用面。模型接受部分輸出作為輸入，這是單步系統做不到的：使用者可以先手動標定幾個節拍位置，讓模型把其餘補完，對困難曲目的標註工作是實質的加速。同樣的機制不需任何訓練修改就支援自迴歸與區塊自迴歸推論——把前一片段輸出的尾端當成永遠不遮罩的條件，就能讓長曲子在片段之間保持一致，而不是像現在這樣各段獨立處理。
+
+作者也指出這個思路不限於節拍：和弦辨識、結構分段同樣有「多個合法輸出」的性質，可能適用同一套處理。這個推論合理，但也提醒我們這篇的貢獻主要是方法論上的可移植性，而非節拍追蹤這個任務本身的突破。 the paper&#x27;s most valuable contribution is not a number but a way of diagnosing: when a model persistently produces errors absent from its training data, ask first whether the fault is at the level of probabilistic modelling rather than reaching for more post-processing. the evidence is persuasive, and the striking part is that the mdm training objective beats the non-diffusion version even at a single inference step. the benefit therefore is not only from iterative inference but from the objective itself; the authors hypothesise that partially masked context reduces training &quot;confusion&quot; when the network sees similar pieces annotated at conflicting metrical levels.
+
+the coherence measurements are concrete. at 8 inference steps, consecutive downbeats per track drop from 0.25 to 0.02 and tempo doubling/halving events from 0.75 to 0.119 (0.06 at 20 steps), against 0 and 0.033 in the gtzan annotations themselves. this measures the diagnosed cause directly rather than reading it off an aggregate f1.
+
+more notable still is what the architecture opens up. the model accepts partial outputs as input, which one-step systems cannot: a user can fix a handful of beat positions and have the model complete the rest, a real speedup for annotating difficult pieces. the same mechanism supports autoregressive and block-autoregressive inference with no training changes — conditioning on the tail of the previous snippet&#x27;s output, always unmasked, would keep long pieces consistent across snippets instead of processing each independently.
+
+the authors note the idea is not specific to beats: chord recognition and structure segmentation share the multiple-valid-output property and may admit the same treatment. that is a reasonable extrapolation, and also a reminder that the contribution here is mainly methodological portability rather than a breakthrough in beat tracking as such.">
+  <header class="card-head" onclick="togglePaper(this)">
+    <div class="tags"><span class="tag" style="--tag:#047857"><span class="zh-only">轉譜與音高分析</span><span class="en-only">Transcription &amp; Pitch</span></span><span class="tag deep">★ <span class="zh-only">新穎架構・深度分析</span><span class="en-only">Novel architecture &middot; deep dive</span></span><span class="tag date-tag mono">2026-08-09</span></div>
+    <h3 class="t-en">Masked diffusion enables coherent beat tracking</h3>
+    <h3 class="t-zh zh-only">遮罩擴散讓節拍追蹤產生前後一致的輸出</h3>
+    <div class="meta">Francesco Foscarin, Filip Korzeniowski, Richard Vogl</div>
+    <div class="meta mono">arXiv:2608.04624 &middot; cs.SD; cs.AI &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> 2026-08-05</div>
+    <div class="links">
+      <a href="https://arxiv.org/abs/2608.04624" target="_blank" rel="noopener" onclick="event.stopPropagation()">abs</a><a href="https://arxiv.org/pdf/2608.04624" target="_blank" rel="noopener" onclick="event.stopPropagation()">pdf</a><a href="https://arxiv.org/html/2608.04624" target="_blank" rel="noopener" onclick="event.stopPropagation()">html</a><a href="https://www.semanticscholar.org/search?q=2608.04624" target="_blank" rel="noopener" onclick="event.stopPropagation()">cited by</a>
+    </div>
+    <span class="chev" aria-hidden="true"></span>
+  </header>
+  <div class="card-body">
+    <div class="why"><span class="zh-only"><b>為什麼挑這篇：</b>把「模型為什麼會吐出自相矛盾的節拍」這個老問題重新診斷成機率建模的缺陷，而不是後處理不夠強，然後用遮罩擴散給出對症的解法。三個為節拍任務量身改造的設計細節都寫得很誠實，包含哪些嘗試失敗了。</span><span class="en-only"><b>Why this one:</b> It re-diagnoses a long-standing failure of beat trackers as a probabilistic modelling defect rather than a post-processing shortfall, then answers it with masked diffusion. The three task-specific modifications are reported honestly, including the variants that did not work.</span></div>
+    <section class="sec"><h4><span class="zh-only">動機</span><span class="en-only">Motivation</span></h4><div class="body zh-only"><p>神經網路節拍追蹤器會產生「不合法」的輸出：連續兩個小節線落在相鄰拍上、速度突然倍增或減半——即使訓練資料裡從來沒有這種東西。長期以來業界的處理方式是套一層動態貝氏網路（DBN）後處理，用「每小節固定幾拍」「速度變化有限」這類硬性約束把輸出掰回合理範圍。</p><p>這篇的出發點是：DBN 治的是症狀，不是病因，而且病因從來沒被講清楚過。作者提出的假設是——問題出在單步前饋這個範式本身隱含了「給定輸入，只有唯一一個正確輸出」的假設。但節拍本來就有歧義：同一首曲子，不同聽者可能採用不同的節律層級（metrical level），數成 4/4 或數成 2/2 都說得通，而且都是風格上合理的解讀。當模型面對這種曲子時，它不是選一個解讀，而是把幾個互相競爭的解讀混在一起輸出，於是產生了任何單一詮釋下都不成立的東西。</p><p>這個診斷有個直接的推論：既然病因是「沒有建模多個合法輸出」，那真正的解法就該是一個能表達多重詮釋、並在推論時一致地選定其中一個的模型，而不是在事後用規則把混合物擦乾淨。</p></div><div class="body en-only"><p>Neural beat trackers emit invalid outputs: consecutive downbeats on adjacent beat positions, abrupt tempo doubling or halving — none of which appear in the training data. The standard remedy has been a Dynamic Bayesian Network (DBN) post-processor that forces the output back into shape with hard constraints such as a fixed number of beats per bar and bounded tempo variation.</p><p>The paper&#x27;s starting point is that the DBN treats symptoms, and that the underlying cause has never been articulated. Their hypothesis is that the fault lies in the single-forward-pass paradigm itself, which implicitly assumes exactly one valid output per input. Beat tracking violates that assumption: listeners may legitimately adopt different metrical levels for the same piece, and alternative beat placements are stylistically plausible. Faced with such a piece, the network does not choose an interpretation — it emits a mixture of competing ones, producing something that is coherent under none of them.</p><p>The diagnosis carries a direct implication. If the cause is a failure to model multiple valid outputs, the fix should be a model that represents several interpretations and commits to one consistently at inference, not a rule-based cleanup of the mixture after the fact.</p></div></section><section class="sec"><h4><span class="zh-only">背景與相關研究</span><span class="en-only">Introduction & Prior Work</span></h4><div class="body zh-only"><p>節拍與小節線追蹤已經被研究了數十年，近年的工作在架構、損失函數、資料增強、預訓練與微調上都有大量嘗試，但幾乎全部共用同一個推論範式：對每個時間框，單次前饋預測一個節拍活化值。</p><p>作者盤點了「讓模型考慮多種輸出」的既有路線與各自的代價。自迴歸模型天然能建模整段輸出的聯合分布，但實作上都有麻煩：逐框自迴歸解碼需要每框一次前饋，30 秒 50 fps 就是 1500 次，推論慢到不可用；改成 [節拍類型, 節拍時間] 的緊湊 token 化雖然避開這點，但絕對時間編碼需要大量時間 token 且無法處理長片段，相對時間編碼則在生成過程中會累積誤差。</p><p>先前工作裡只有 Gagneré 等人正面處理過多重合法輸出的問題，他們用多個預測頭去捕捉不同的階層層級——但那只用在自監督預訓練階段，微調與推論時仍然回到單頭架構，所以最終輸出照樣有這篇要解的毛病。</p><p>這篇的基底是 Beat This（Foscarin 等人），一個權重、訓練程式與資料全部開源的模型。作者沿用它的資料、增強方法、評估指標與大部分超參數，只把架構與損失改造成能配合遮罩擴散。遮罩擴散這邊則主要參照 LLaDA，理由是它在訓練與推論都用線性遮罩，實作最單純。</p></div><div class="body en-only"><p>Beat and downbeat tracking has been studied for decades, with recent work exploring architectures, losses, augmentation, pre-training and fine-tuning — but nearly all of it shares one inference paradigm: a single forward pass predicting a beat activation per time frame.</p><p>The authors survey the existing routes to modelling multiple outputs and the cost of each. Autoregressive models capture the joint distribution over the full output sequence, but every implementation has a drawback. Frame-wise autoregressive decoding needs one pass per frame — 1500 passes for 30 seconds at 50 fps — which is prohibitively slow. Compact [beat-type, beat-time] tokenisation avoids that, but absolute-time encoding needs many time tokens and breaks down on longer excerpts, while relative-time encoding accumulates error during generation.</p><p>Among prior work, only Gagneré et al. confront the multiple-valid-output problem directly, using multiple heads to capture different hierarchical levels. That idea is confined to their self-supervised pre-training stage; fine-tuning and inference revert to a single head, so their predictions still exhibit the pathology this paper targets.</p><p>The base here is Beat This (Foscarin et al.), whose weights, training code and data are fully open. The authors reuse its data, augmentation, metrics and most hyperparameters, changing only what masked diffusion requires. For the diffusion side they follow LLaDA, chosen because its linear masking in both training and inference makes for the simplest implementation.</p></div></section><section class="sec"><h4><span class="zh-only">方法</span><span class="en-only">Method</span></h4><div class="body zh-only"><p>核心設定是遮罩擴散模型（MDM）：把節拍序列 y 視為要被逐步遮罩與還原的對象，而音訊 x 在整個前向與反向過程中始終完全可見，也就是建模條件分布而非邊際分布。推論從全遮罩序列開始，每一步做一次前饋、揭露一部分框，直到整段填滿。這樣模型可以在早期步驟先選定一個合法的詮釋，再前後一致地把剩下的填完。</p><p>作者刻意把架構改動壓到最小，好繼續沿用既有的研究成果。改動有三處：加入節拍與小節線兩張可學習的 embedding 表，詞彙為 {MASK, NO_EVENT, EVENT, PAD}，在 6 層 RoFormer 之前才加入（前端只處理音訊），並乘上 √d 放大權重，這個簡單做法在初步實驗裡就有效；把原本的 sum head 換成兩個獨立線性頭，因為 sum head 會在小節線 logit 上製造反向尖峰，單步預測時無害，但這裡遮罩排程要靠 logit 信心度決定揭露順序，被污染的信心度會出問題；把 FFN 的 GELU 換成 SwiGLU，這不是必要的，只是讓設計向現代網路對齊並順帶改善結果。</p><p>真正把通用 MDM 變成能用的節拍追蹤器的，是三個非顯而易見的設計決定：</p><p>第一，<strong>節拍與小節線獨立遮罩</strong>。訓練時兩個通道各自抽自己的遮罩比例與遮罩，所以某一步可能節拍遮 30%、小節線遮 80%。這是推論時基於信心度的揭露策略能正確運作的前提——因為兩個通道的信心度必須各自校準到自己的稀疏度。作者試過各種在揭露前先合併兩通道信心度的做法，也試過先揭節拍再揭小節線或反過來，全都讓效能下降。理由是有些曲子節拍比小節線好抓（節奏穩定但拍號會變），有些反過來（縹緲的音樂但和聲在小節線上變化清楚），而且小節線大約比節拍稀疏四倍，logit 量級本來就不在同一個尺度上。</p><p>第二，<strong>平衡揭露排程</strong>。負 logit（非事件框）天生比正 logit 更有信心，所以純粹按信心度排序會先把非事件全部揭完，造成訓練與推論的不匹配——訓練時模型看到的永遠是事件與非事件混合的脈絡。在這個設定下做迭代推論反而比單步更差。解法是每一步先計算當前遮罩框中預測的正負比例，再按這個比例把揭露預算分配給正例與負例。</p><p>第三，<strong>步間峰值挑選</strong>。逐框網路傾向在每個真實節拍附近產生跨數框的活化叢集。原本 Beat This 是在最後做一次 7 框滑動窗的非極大值抑制，但在迭代推論裡，相鄰的峰會被揭露成相鄰的 EVENT token——這種情況訓練資料裡從未出現過（每個事件都是單一脈衝）。作者的做法是每一步推論後就做一次峰值挑選：只要有新的 EVENT 被揭露，鄰近窗內的所有框也一併被揭露並強制設為 NO_EVENT。同時順手加上一條音樂上必然成立的規則：揭露一個小節線 EVENT 時，同位置也揭露一個節拍 EVENT。作者特別指出，這組規則遠比 DBN 少，而且對所有音樂都普遍成立。</p><p>最後還加了模型集成：對多個模型的輸出 logit 取平均後再算信心度。神經網路本來就不擅長估計機率、傾向過度自信，平均能得到較可靠的信心度。這在節拍追蹤是成熟技術，但在 MDM 文獻裡不常見，因為大模型推論成本太高——25M 參數的模型則可以接受。</p></div><div class="body en-only"><p>The core setup is a Masked Diffusion Model. The beat sequence y is what gets progressively masked and recovered, while the audio x stays fully visible throughout the forward and reverse processes — the model learns a conditional distribution, not a marginal one. Inference starts from a fully masked sequence and iteratively reveals frames over a handful of forward passes, so the model can commit to a valid interpretation in the early steps and then fill in the rest coherently.</p><p>Architectural changes are deliberately minimal, so prior work on architectures, losses and post-processing still applies. There are three. Two learnable embedding tables (beats, downbeats) over the vocabulary {MASK, NO_EVENT, EVENT, PAD} are added just before the 6-layer RoFormer — the frontend handles audio only — and scaled by √d, a simple trick that raises the weight of the beat input and proved effective in preliminary experiments. The original sum head is replaced by two independent linear heads, because the sum head sometimes produces inverted spikes in the downbeat logits; harmless for one-step prediction, but here the masking scheduler relies on logit confidence to order the reveals, and contaminated confidences break it. GELU in the FFN is swapped for SwiGLU — not required for the method, just alignment with modern practice that also helps results.</p><p>What actually turns a generic MDM into a working beat tracker is three non-obvious choices:</p><p><strong>Independent masking of the two channels.</strong> During training each channel draws its own masking ratio and its own mask, so a step may show 30% of beat frames masked and 80% of downbeat frames masked. This is the precondition for confidence-based unmasking to work per channel at inference. The authors tried aggregating confidences across channels before deciding what to reveal, and tried revealing beats first then downbeats and vice versa; all of it lowered performance. Their explanation is that some pieces make beats easier than downbeats (stable pulse, changing time signature) and others the reverse (ethereal music with clear harmonic change at downbeats), and that downbeats are roughly four times sparser, putting the two channels&#x27; logit magnitudes on different scales.</p><p><strong>A balanced unmasking schedule.</strong> Negative logits — non-event frames — are systematically more confident than positive ones, so pure confidence ordering reveals all the non-events first. That creates a train/inference mismatch, since during training the model always sees a balanced mix, and iterative inference in this regime performs worse than a single step. The fix computes the current positive-to-negative ratio among the masked predictions at each step and splits the unmasking budget accordingly.</p><p><strong>Peak picking between steps.</strong> Frame-wise networks spread activation across several frames near each true beat. Beat This suppresses non-maxima within a 7-frame window once, at the end. Under iterative inference, adjacent peaks become adjacent EVENT tokens — a configuration that never occurs in training, where every event is a single impulse. So peak picking is applied after every inference step: whenever an EVENT is revealed, all frames in its proximity window are also revealed and forced to NO_EVENT. The same hook enforces one musically universal rule: revealing a downbeat EVENT also reveals a beat EVENT at that position. The authors are explicit that this is a far smaller rule set than the DBN&#x27;s, and one that holds across all music.</p><p>Finally, model ensembling: output logits are averaged across models before confidence is computed. Networks estimate probabilities poorly and tend to be overconfident, and averaging yields a more reliable confidence signal. Ensembling is well established in beat tracking but rare in the MDM literature because of inference cost at scale — at 25M parameters the authors find it acceptable.</p></div></section><section class="sec"><h4><span class="zh-only">限制</span><span class="en-only">Limitations</span></h4><div class="body zh-only"><p>作者自己列出的代價很清楚：訓練時間加倍（150 epoch 增為 300），推論時間大約是單步的數倍——雖然他們指出前端只需算一次，還有優化空間。模型集成則讓這兩項成本再乘上模型數量。</p><p>更根本的一個限制被作者誠實地點出來：他們讓模型能在多個合法詮釋中消歧義了，但評估指標仍然假設只有一個正確答案。AMLt 部分處理了這件事（容許二分之一與二倍速），但預設設定不含三分法細分，也無法處理複雜拍號、拍號變化與本質上模稜兩可的節拍位置。換句話說，這篇最想證明的那個能力，現有指標其實測不太到。</p><p>實驗設計上也有幾點值得留意。測試集是 GTZAN，而 GTZAN 以 3 拍與 4 拍曲子為主，只有少數拍號變化——這正好是 DBN 假設成立得最好的場景，所以「不用 DBN 也能打平」這個結論在更多樣的音樂上會如何，是外推而非實測。與 SOTA 系統的比較也不是嚴格的對照：Gagneré 等人的程式與模型未公開，無法做更深入的評估或統計顯著性檢定；Ru 等人微調的是參數量十倍以上的 MusicFM。作者自己也說直接比較不是目的，只是提供脈絡。</p><p>此外，訓練超參數有一部分是被硬體逼出來的：因為 GPU 限制只能用 fp16 而非 bf16 混合精度，所以必須調低學習率、加大 weight decay、加梯度裁剪，並把遮罩比例下限 ε 設得比語言 MDM 高得多（後者約 0.001）。這些不是方法本身的需求，但確實混在結果裡。</p></div><div class="body en-only"><p>The costs the authors themselves list are clear: training time doubles (150 epochs to 300) and inference is several times slower than a single pass, though they note the frontend need only be computed once, leaving room for optimisation. Ensembling multiplies both by the number of models.</p><p>A deeper limitation is stated honestly: they have given the model the ability to disambiguate among valid interpretations, but the metrics still assume exactly one is correct. AMLt partially accommodates this by allowing half and double tempi, but its default configuration excludes ternary subdivisions and cannot handle complex time signatures, time-signature changes, or genuinely ambiguous beat positions. The capability the paper most wants to demonstrate is the one current metrics measure least well.</p><p>Several aspects of the experimental design deserve attention. The test set is GTZAN, which is dominated by pieces in 3 and 4 beats per bar with few time-signature changes — precisely the regime where the DBN&#x27;s assumptions hold best. So the claim that a DBN-free system can match DBN-based ones on more diverse music is an extrapolation, not a measurement. The SOTA comparison is not a controlled one either: Gagneré et al.&#x27;s code and models are not public, precluding deeper evaluation or significance testing, and Ru et al. fine-tune MusicFM, a model more than ten times larger. The authors say directly that head-to-head comparison is not their objective and the numbers are context.</p><p>Some hyperparameters are also forced by hardware rather than by the method: GPU constraints meant fp16 rather than bf16 mixed precision, which required a lower learning rate, higher weight decay, gradient clipping, and a masking-ratio floor ε far above what language MDMs use (around 0.001). These are not requirements of the approach, but they are mixed into the results.</p></div></section><section class="sec"><h4><span class="zh-only">討論</span><span class="en-only">Discussion</span></h4><div class="body zh-only"><p>這篇最有價值的地方不在數字，而在它示範了一種診斷方式：當模型持續產生訓練資料裡不存在的錯誤時，先問這是不是機率建模層次的問題，而不是急著加後處理。作者提出的證據鏈很有說服力——最引人注意的是，即使只用「單步」推論，MDM 訓練目標也已經勝過非擴散版本。這代表好處不只來自迭代推論，也來自訓練目標本身；作者的假設是部分遮罩的脈絡減少了「訓練混淆」，也就是當網路看到節律層級互相衝突的相似曲目時不會被逼著平均掉。</p><p>連貫性的量化結果也具體：8 步推論下，每首曲子的連續小節線平均從 0.25 降到 0.02，速度倍增／減半事件從 0.75 降到 0.119（20 步時再降到 0.06）。作為對照，GTZAN 標註本身是 0 與 0.033。這是直接對著病因量測，而不是只看整體 F1。</p><p>更值得注意的是這個架構順帶打開的應用面。模型接受部分輸出作為輸入，這是單步系統做不到的：使用者可以先手動標定幾個節拍位置，讓模型把其餘補完，對困難曲目的標註工作是實質的加速。同樣的機制不需任何訓練修改就支援自迴歸與區塊自迴歸推論——把前一片段輸出的尾端當成永遠不遮罩的條件，就能讓長曲子在片段之間保持一致，而不是像現在這樣各段獨立處理。</p><p>作者也指出這個思路不限於節拍：和弦辨識、結構分段同樣有「多個合法輸出」的性質，可能適用同一套處理。這個推論合理，但也提醒我們這篇的貢獻主要是方法論上的可移植性，而非節拍追蹤這個任務本身的突破。</p></div><div class="body en-only"><p>The paper&#x27;s most valuable contribution is not a number but a way of diagnosing: when a model persistently produces errors absent from its training data, ask first whether the fault is at the level of probabilistic modelling rather than reaching for more post-processing. The evidence is persuasive, and the striking part is that the MDM training objective beats the non-diffusion version even at a single inference step. The benefit therefore is not only from iterative inference but from the objective itself; the authors hypothesise that partially masked context reduces training &quot;confusion&quot; when the network sees similar pieces annotated at conflicting metrical levels.</p><p>The coherence measurements are concrete. At 8 inference steps, consecutive downbeats per track drop from 0.25 to 0.02 and tempo doubling/halving events from 0.75 to 0.119 (0.06 at 20 steps), against 0 and 0.033 in the GTZAN annotations themselves. This measures the diagnosed cause directly rather than reading it off an aggregate F1.</p><p>More notable still is what the architecture opens up. The model accepts partial outputs as input, which one-step systems cannot: a user can fix a handful of beat positions and have the model complete the rest, a real speedup for annotating difficult pieces. The same mechanism supports autoregressive and block-autoregressive inference with no training changes — conditioning on the tail of the previous snippet&#x27;s output, always unmasked, would keep long pieces consistent across snippets instead of processing each independently.</p><p>The authors note the idea is not specific to beats: chord recognition and structure segmentation share the multiple-valid-output property and may admit the same treatment. That is a reasonable extrapolation, and also a reminder that the contribution here is mainly methodological portability rather than a breakthrough in beat tracking as such.</p></div></section>
+  </div>
+</article>
+<article class="card" data-subfield="transcription" data-deep="0" data-search="dense-sparse dynamic time warping for customizing piano concerto accompaniments 用於客製化鋼琴協奏曲伴奏的稠密—稀疏動態時間規整 tj tsai, kavi dey, yigitcan özer, meinard müller 2607.18189 轉譜與音高分析 transcription &amp; pitch 在人人都堆神經網路的當下，這篇用一個很輕的 dtw 變體打贏了 hdemucs 與 spleeter，而且釋出了標註資料集與程式碼。方法簡單到你今天下午就能拿去試在別的對齊任務上。 in a moment when everyone stacks neural networks, this beats hdemucs and spleeter with a very light dtw variant, and releases both an annotated dataset and code. the method is simple enough to try on another alignment task this afternoon. 2026-08-05 music minus one（mmo）錄音讓演奏者能跟著伴奏練習，但那個伴奏是死的——速度、彈性速度、呼吸點都固定，演奏者只能遷就它。理想情況是反過來：讓伴奏跟著**你這一次的演奏**走。
+
+問題在於既有的自動伴奏系統幾乎都預設拿得到符號樂譜（midi）。作者直接點出這個假設在協奏曲上不成立：「對某些曲類（例如鋼琴協奏曲），符號樂譜並不普及，而且製作起來非常耗時。」於是本文的設定改為只用三份**音訊**：使用者的獨奏鋼琴錄音、純管弦樂錄音、以及鋼琴加管弦樂的混音錄音。 music minus one (mmo) recordings let a performer practise against an accompaniment, but that accompaniment is fixed — tempo, rubato and breathing points are frozen, and the player has to accommodate it. the desirable arrangement is the reverse: the accompaniment should follow **this particular performance**.
+
+the obstacle is that existing automatic accompaniment systems almost all assume access to a symbolic score. the authors state plainly why that assumption fails for concertos: &quot;for certain genres of music (such as piano concertos), symbolic scores are not widely available and are very time-consuming to create.&quot; so the setup here uses only three **audio** recordings: the user&#x27;s solo piano performance, an orchestra-only recording, and a mixed piano-plus-orchestra recording. 如果不用樂譜，直覺的做法是先用音源分離把混音中的鋼琴拿掉、留下管弦樂，再與純管弦樂錄音對齊。這條路的問題是分離本身會引入殘響與偽影，對齊模組拿到的是被污染的訊號。
+
+作者的觀察更根本：真正的困難是**頻譜不匹配**——混音裡有鋼琴、純管弦樂錄音裡沒有，兩者的頻譜統計天生就對不起來，而 dtw 的成本矩陣對這種不匹配相當敏感。與其花大力氣去「移除」鋼琴，不如讓對齊演算法**只看那些不受污染、且含有明確時間線索的幀**。這個轉念是整篇的核心。 without a score, the intuitive approach is to strip the piano from the mix with source separation, then align the residual orchestra against the orchestra-only recording. the problem is that separation introduces artefacts and bleed, so the alignment module receives a contaminated signal.
+
+the authors&#x27; observation is more fundamental: the real difficulty is **spectral mismatch** — the mix contains piano and the orchestra-only recording does not, so their spectral statistics simply do not correspond, and a dtw cost matrix is quite sensitive to that. rather than working hard to *remove* the piano, let the alignment algorithm **look only at frames that are uncontaminated and carry clear timing cues**. that reframing is the core of the paper. **管線**共四步：(1) 用 chroma 特徵與 subsequence dtw 把使用者的鋼琴錄音 p_query 對齊到混音 m_ref；(2) 用 dense-sparse dtw 把純管弦樂 o_acc 對齊到 m_ref；(3) 合成兩組對齊，推得 p_query 與 o_acc 之間的時間對應；(4) 對 o_acc 做時間尺度修改（tsm）以同步。
+
+**dense-sparse dtw 本身**分兩件事。
+
+*稀疏幀選取*：計算 chroma 特徵的通量 f_t = ‖o_t − o_{t+1}‖₁，也就是相鄰幀的變化量——變化大的幀通常對應音符起始、和聲轉換這類明確的時間錨點。選一個門檻 τ 使保留比例為 γ（例如 γ=0.2，只留兩成的幀），保留超過門檻者，並記錄被保留幀之間的間隔 g。
+
+*成本與動態規劃*：對 l 個被選中的幀與 n 個混音幀建立 l×n 成本矩陣，距離用 cosine。dp 依間隔大小切換兩種模式——間隔為 1 時走**稠密模式**，使用標準 dtw 轉移 {(1,1), (1,2), (2,1)}；間隔 g&gt;1 時走**稀疏模式**，允許水平移動落在 ⌈g/2⌉ 到 2g 之間。這個設計很直觀：跳過了 g 幀，就該允許在參考序列上前進大約 g 幀的量，上下各留一倍的彈性。回溯時取最後一列的最小值，沿 backpointer 回推並映射回稠密座標。
+
+*tsm*：以諧波—打擊源分離為基礎做時間伸縮，實驗中使用的因子為 {0.8, 0.9, 1.0, 1.11, 1.25}。 **the pipeline** has four steps: (1) align the user&#x27;s piano recording p_query to the mix m_ref with subsequence dtw on chroma features; (2) align the orchestra-only recording o_acc to m_ref with dense-sparse dtw; (3) compose the two alignments to infer the p_query–o_acc correspondence; (4) time-scale modify o_acc to synchronise.
+
+**dense-sparse dtw itself** does two things.
+
+*sparse frame selection*: compute chroma flux f_t = ‖o_t − o_{t+1}‖₁, the frame-to-frame change — high-flux frames typically correspond to note onsets and harmonic changes, i.e. clear temporal anchors. choose a threshold τ retaining a fraction γ of frames (e.g. γ=0.2, keeping one frame in five), keep those above threshold, and record the gaps g between retained frames.
+
+*cost and dynamic programming*: build an l×n cost matrix between the l selected frames and the n mix frames using cosine distance. the dp switches between two modes according to gap size — with a gap of 1 it runs in **dense mode** using standard dtw transitions {(1,1), (1,2), (2,1)}; with a gap g&gt;1 it runs in **sparse mode**, allowing horizontal movement between ⌈g/2⌉ and 2g. the intuition is direct: having skipped g frames, the path should be allowed to advance roughly g frames in the reference, with a factor-of-two margin either side. backtracking takes the minimum of the final row and follows backpointers, mapping back to dense coordinates.
+
+*tsm*: time-scale modification based on harmonic-percussive source separation, with factors {0.8, 0.9, 1.0, 1.11, 1.25} in the experiments. 作者明講的限制有兩點：本研究**只處理離線任務**（「其框架設計上可系統性研究離線與線上兩種協奏曲伴奏生成，但本初步研究僅聚焦離線任務」），以及只評估了對齊準確度，**輸出音訊的主觀品質評估留待未來**——考慮到 tsm 在 ±25% 的伸縮下會產生明顯偽影，這個空缺不小。
+
+數據上還有幾點值得留意。資料規模是四個樂章、總長 2:51:05、約 150 個情境（靠 tsm 資料增強），以樂譜小節的下拍為標註，且只在鋼琴與管弦樂同時發聲的小節上評估。這是很紮實的標註工作，但四個樂章、四位作曲家的規模仍屬小型，跨曲目的泛化未經檢驗。
+
+最該注意的是結果的細節：在嚴格容忍度下 ds-dtw 確實最好（0.1 秒：53.1% vs hdemucs 55.4%；0.2 秒：29.9% vs 33.0%；0.5 秒：10.0% vs 10.7%），**但在寬鬆容忍度下反而輸給 hdemucs**（1.0 秒：2.9% vs 2.1%；2.0 秒：0.6% vs 0.3%）。這個交叉很有訊息量——它暗示稀疏選幀提升了局部精度，卻在缺乏明顯時間線索的段落（長音、持續和聲、漸慢）更容易發生大幅偏移。論文把重點放在嚴格容忍度的優勢上，但這個 trade-off 值得被明說。另外，所有系統在 0.1 秒容忍度下錯誤率都超過 50%，代表**幀級精度的對齊仍遠未解決**。最後一個實務限制：整套方法要求存在一份純管弦樂錄音，而那本身就是 mmo 商品，並非隨手可得。 the authors name two limitations: the study covers the **offline task only** (&quot;designed to allow for systematic study of both offline and online concerto accompaniment generation, though in this initial study we focus only on the offline task&quot;), and only alignment accuracy is evaluated — **subjective audio quality of the output remains future work**, a non-trivial gap given that tsm at ±25% produces audible artefacts.
+
+a few notes on the data. the corpus is four movements totalling 2:51:05 across roughly 150 scenarios (augmented via tsm), annotated at measure downbeats, with evaluation restricted to measures where piano and orchestra are both active. that is solid annotation work, but four movements by four composers is small, and cross-repertoire generalisation is untested.
+
+the detail most worth noting is in the results: at tight tolerances ds-dtw is indeed best (0.1 s: 53.1% vs hdemucs 55.4%; 0.2 s: 29.9% vs 33.0%; 0.5 s: 10.0% vs 10.7%), **but at loose tolerances it loses to hdemucs** (1.0 s: 2.9% vs 2.1%; 2.0 s: 0.6% vs 0.3%). that crossover is informative — it suggests sparse frame selection improves local precision but is more prone to large excursions in passages lacking clear timing cues (sustained notes, held harmonies, ritardandi). the paper emphasises the tight-tolerance win, but the trade-off deserves stating. note too that every system exceeds 50% error at 0.1 s tolerance, meaning **frame-accurate alignment remains far from solved**. a final practical constraint: the method requires an orchestra-only recording, which is itself an mmo product rather than something freely available. 這篇最值得帶走的不是那張表，而是**方法論上的姿態**：面對頻譜不匹配，作者沒有加一個更大的分離網路，而是縮小問題——只對齊那些本來就可靠的幀。結果是一個更簡單、更快、且在關鍵區間更準的系統。在目前的研究氛圍下，這是很好的提醒，也是審稿時會加分的敘事。
+
+可移植性很高。稀疏—稠密的切換邏輯不預設任何音樂類型或樂器，凡是「兩個版本音色差很多但事件時間對得起來」的對齊任務都能試：跨版本的錄音對齊、翻唱歌曲對齊、樂譜—音訊對齊（合成音訊 vs 真實演奏的頻譜差距同樣巨大）、甚至是不同錄音條件下的田野錄音比對。γ 只有一個超參數，你可以在一個下午內把它接到自己既有的 dtw 管線上做消融。
+
+延伸的研究缺口也清楚。作者自己指出的線上（即時）版本是最直接的一條——稀疏選幀在因果設定下如何做，是個真問題，因為 flux 門檻需要未來幀。另一條是**自適應 γ**：既然失效似乎集中在時間線索稀疏的段落，那 γ 或許不該全曲固定，而應隨局部 flux 分布調整。第三條是把選幀準則從 chroma flux 換成 onset strength 或學習得到的顯著度，看看是否能同時修好寬容忍度下的大幅偏移。此外，作者釋出了四個樂章的小節標註與程式碼（hmc-mir），這對缺乏標註的協奏曲對齊研究來說本身就是有價值的貢獻，可以直接當成你自己方法的比較基準。 the most transferable thing here is not the results table but the **methodological posture**: faced with spectral mismatch, the authors did not add a bigger separation network — they shrank the problem, aligning only the frames that were reliable to begin with. the result is simpler, faster and more accurate in the range that matters. in the current research climate that is a useful reminder and a narrative that tends to earn goodwill in review.
+
+it transfers well. the sparse-dense switching logic assumes nothing about genre or instrumentation, so any alignment task where two versions differ sharply in timbre but correspond in event timing is fair game: cross-version recording alignment, cover-song alignment, score-to-audio alignment (synthesised versus performed audio has an equally large spectral gap), even comparing field recordings made under different conditions. with γ as essentially the only hyperparameter, you could bolt it onto an existing dtw pipeline and run an ablation in an afternoon.
+
+the open gaps are clear too. the online (real-time) version the authors flag is the most direct — and a genuine research question, since a flux threshold needs future frames and must be rethought in a causal setting. a second is **adaptive γ**: if failures concentrate in passages with sparse timing cues, γ arguably should not be fixed across a movement but should track the local flux distribution. a third is swapping the selection criterion from chroma flux to onset strength or a learned saliency, to see whether the large excursions at loose tolerances can be fixed at the same time. finally, the released measure-level annotations for four movements plus code (hmc-mir) are a genuine contribution in their own right for a task starved of annotated data, and make a ready baseline for your own methods.">
+  <header class="card-head" onclick="togglePaper(this)">
+    <div class="tags"><span class="tag" style="--tag:#047857"><span class="zh-only">轉譜與音高分析</span><span class="en-only">Transcription &amp; Pitch</span></span><span class="tag date-tag mono">2026-08-05</span></div>
+    <h3 class="t-en">Dense-Sparse Dynamic Time Warping for Customizing Piano Concerto Accompaniments</h3>
+    <h3 class="t-zh zh-only">用於客製化鋼琴協奏曲伴奏的稠密—稀疏動態時間規整</h3>
+    <div class="meta">TJ Tsai, Kavi Dey, Yigitcan Özer, Meinard Müller</div>
+    <div class="meta mono">arXiv:2607.18189 &middot; cs.SD; eess.AS &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> 2026-07-20</div>
+    <div class="links">
+      <a href="https://arxiv.org/abs/2607.18189" target="_blank" rel="noopener" onclick="event.stopPropagation()">abs</a><a href="https://arxiv.org/pdf/2607.18189" target="_blank" rel="noopener" onclick="event.stopPropagation()">pdf</a><a href="https://arxiv.org/html/2607.18189" target="_blank" rel="noopener" onclick="event.stopPropagation()">html</a><a href="https://www.semanticscholar.org/search?q=2607.18189" target="_blank" rel="noopener" onclick="event.stopPropagation()">cited by</a>
+    </div>
+    <span class="chev" aria-hidden="true"></span>
+  </header>
+  <div class="card-body">
+    <div class="why"><span class="zh-only"><b>為什麼挑這篇：</b>在人人都堆神經網路的當下，這篇用一個很輕的 DTW 變體打贏了 HDemucs 與 Spleeter，而且釋出了標註資料集與程式碼。方法簡單到你今天下午就能拿去試在別的對齊任務上。</span><span class="en-only"><b>Why this one:</b> In a moment when everyone stacks neural networks, this beats HDemucs and Spleeter with a very light DTW variant, and releases both an annotated dataset and code. The method is simple enough to try on another alignment task this afternoon.</span></div>
+    <section class="sec"><h4><span class="zh-only">動機</span><span class="en-only">Motivation</span></h4><div class="body zh-only"><p>Music Minus One（MMO）錄音讓演奏者能跟著伴奏練習，但那個伴奏是死的——速度、彈性速度、呼吸點都固定，演奏者只能遷就它。理想情況是反過來：讓伴奏跟著<strong>你這一次的演奏</strong>走。</p><p>問題在於既有的自動伴奏系統幾乎都預設拿得到符號樂譜（MIDI）。作者直接點出這個假設在協奏曲上不成立：「對某些曲類（例如鋼琴協奏曲），符號樂譜並不普及，而且製作起來非常耗時。」於是本文的設定改為只用三份<strong>音訊</strong>：使用者的獨奏鋼琴錄音、純管弦樂錄音、以及鋼琴加管弦樂的混音錄音。</p></div><div class="body en-only"><p>Music Minus One (MMO) recordings let a performer practise against an accompaniment, but that accompaniment is fixed — tempo, rubato and breathing points are frozen, and the player has to accommodate it. The desirable arrangement is the reverse: the accompaniment should follow <strong>this particular performance</strong>.</p><p>The obstacle is that existing automatic accompaniment systems almost all assume access to a symbolic score. The authors state plainly why that assumption fails for concertos: &quot;for certain genres of music (such as piano concertos), symbolic scores are not widely available and are very time-consuming to create.&quot; So the setup here uses only three <strong>audio</strong> recordings: the user&#x27;s solo piano performance, an orchestra-only recording, and a mixed piano-plus-orchestra recording.</p></div></section><section class="sec"><h4><span class="zh-only">背景與相關研究</span><span class="en-only">Introduction & Prior Work</span></h4><div class="body zh-only"><p>如果不用樂譜，直覺的做法是先用音源分離把混音中的鋼琴拿掉、留下管弦樂，再與純管弦樂錄音對齊。這條路的問題是分離本身會引入殘響與偽影，對齊模組拿到的是被污染的訊號。</p><p>作者的觀察更根本：真正的困難是<strong>頻譜不匹配</strong>——混音裡有鋼琴、純管弦樂錄音裡沒有，兩者的頻譜統計天生就對不起來，而 DTW 的成本矩陣對這種不匹配相當敏感。與其花大力氣去「移除」鋼琴，不如讓對齊演算法<strong>只看那些不受污染、且含有明確時間線索的幀</strong>。這個轉念是整篇的核心。</p></div><div class="body en-only"><p>Without a score, the intuitive approach is to strip the piano from the mix with source separation, then align the residual orchestra against the orchestra-only recording. The problem is that separation introduces artefacts and bleed, so the alignment module receives a contaminated signal.</p><p>The authors&#x27; observation is more fundamental: the real difficulty is <strong>spectral mismatch</strong> — the mix contains piano and the orchestra-only recording does not, so their spectral statistics simply do not correspond, and a DTW cost matrix is quite sensitive to that. Rather than working hard to *remove* the piano, let the alignment algorithm <strong>look only at frames that are uncontaminated and carry clear timing cues</strong>. That reframing is the core of the paper.</p></div></section><section class="sec"><h4><span class="zh-only">方法</span><span class="en-only">Method</span></h4><div class="body zh-only"><p><strong>管線</strong>共四步：(1) 用 chroma 特徵與 subsequence DTW 把使用者的鋼琴錄音 P_query 對齊到混音 M_ref；(2) 用 Dense-Sparse DTW 把純管弦樂 O_acc 對齊到 M_ref；(3) 合成兩組對齊，推得 P_query 與 O_acc 之間的時間對應；(4) 對 O_acc 做時間尺度修改（TSM）以同步。</p><p><strong>Dense-Sparse DTW 本身</strong>分兩件事。</p><p>*稀疏幀選取*：計算 chroma 特徵的通量 f_t = ‖o_t − o_{t+1}‖₁，也就是相鄰幀的變化量——變化大的幀通常對應音符起始、和聲轉換這類明確的時間錨點。選一個門檻 τ 使保留比例為 γ（例如 γ=0.2，只留兩成的幀），保留超過門檻者，並記錄被保留幀之間的間隔 g。</p><p>*成本與動態規劃*：對 L 個被選中的幀與 N 個混音幀建立 L×N 成本矩陣，距離用 cosine。DP 依間隔大小切換兩種模式——間隔為 1 時走<strong>稠密模式</strong>，使用標準 DTW 轉移 {(1,1), (1,2), (2,1)}；間隔 g&gt;1 時走<strong>稀疏模式</strong>，允許水平移動落在 ⌈g/2⌉ 到 2g 之間。這個設計很直觀：跳過了 g 幀，就該允許在參考序列上前進大約 g 幀的量，上下各留一倍的彈性。回溯時取最後一列的最小值，沿 backpointer 回推並映射回稠密座標。</p><p>*TSM*：以諧波—打擊源分離為基礎做時間伸縮，實驗中使用的因子為 {0.8, 0.9, 1.0, 1.11, 1.25}。</p></div><div class="body en-only"><p><strong>The pipeline</strong> has four steps: (1) align the user&#x27;s piano recording P_query to the mix M_ref with subsequence DTW on chroma features; (2) align the orchestra-only recording O_acc to M_ref with Dense-Sparse DTW; (3) compose the two alignments to infer the P_query–O_acc correspondence; (4) time-scale modify O_acc to synchronise.</p><p><strong>Dense-Sparse DTW itself</strong> does two things.</p><p>*Sparse frame selection*: compute chroma flux f_t = ‖o_t − o_{t+1}‖₁, the frame-to-frame change — high-flux frames typically correspond to note onsets and harmonic changes, i.e. clear temporal anchors. Choose a threshold τ retaining a fraction γ of frames (e.g. γ=0.2, keeping one frame in five), keep those above threshold, and record the gaps g between retained frames.</p><p>*Cost and dynamic programming*: build an L×N cost matrix between the L selected frames and the N mix frames using cosine distance. The DP switches between two modes according to gap size — with a gap of 1 it runs in <strong>dense mode</strong> using standard DTW transitions {(1,1), (1,2), (2,1)}; with a gap g&gt;1 it runs in <strong>sparse mode</strong>, allowing horizontal movement between ⌈g/2⌉ and 2g. The intuition is direct: having skipped g frames, the path should be allowed to advance roughly g frames in the reference, with a factor-of-two margin either side. Backtracking takes the minimum of the final row and follows backpointers, mapping back to dense coordinates.</p><p>*TSM*: time-scale modification based on harmonic-percussive source separation, with factors {0.8, 0.9, 1.0, 1.11, 1.25} in the experiments.</p></div></section><section class="sec"><h4><span class="zh-only">限制</span><span class="en-only">Limitations</span></h4><div class="body zh-only"><p>作者明講的限制有兩點：本研究<strong>只處理離線任務</strong>（「其框架設計上可系統性研究離線與線上兩種協奏曲伴奏生成，但本初步研究僅聚焦離線任務」），以及只評估了對齊準確度，<strong>輸出音訊的主觀品質評估留待未來</strong>——考慮到 TSM 在 ±25% 的伸縮下會產生明顯偽影，這個空缺不小。</p><p>數據上還有幾點值得留意。資料規模是四個樂章、總長 2:51:05、約 150 個情境（靠 TSM 資料增強），以樂譜小節的下拍為標註，且只在鋼琴與管弦樂同時發聲的小節上評估。這是很紮實的標註工作，但四個樂章、四位作曲家的規模仍屬小型，跨曲目的泛化未經檢驗。</p><p>最該注意的是結果的細節：在嚴格容忍度下 DS-DTW 確實最好（0.1 秒：53.1% vs HDemucs 55.4%；0.2 秒：29.9% vs 33.0%；0.5 秒：10.0% vs 10.7%），<strong>但在寬鬆容忍度下反而輸給 HDemucs</strong>（1.0 秒：2.9% vs 2.1%；2.0 秒：0.6% vs 0.3%）。這個交叉很有訊息量——它暗示稀疏選幀提升了局部精度，卻在缺乏明顯時間線索的段落（長音、持續和聲、漸慢）更容易發生大幅偏移。論文把重點放在嚴格容忍度的優勢上，但這個 trade-off 值得被明說。另外，所有系統在 0.1 秒容忍度下錯誤率都超過 50%，代表<strong>幀級精度的對齊仍遠未解決</strong>。最後一個實務限制：整套方法要求存在一份純管弦樂錄音，而那本身就是 MMO 商品，並非隨手可得。</p></div><div class="body en-only"><p>The authors name two limitations: the study covers the <strong>offline task only</strong> (&quot;designed to allow for systematic study of both offline and online concerto accompaniment generation, though in this initial study we focus only on the offline task&quot;), and only alignment accuracy is evaluated — <strong>subjective audio quality of the output remains future work</strong>, a non-trivial gap given that TSM at ±25% produces audible artefacts.</p><p>A few notes on the data. The corpus is four movements totalling 2:51:05 across roughly 150 scenarios (augmented via TSM), annotated at measure downbeats, with evaluation restricted to measures where piano and orchestra are both active. That is solid annotation work, but four movements by four composers is small, and cross-repertoire generalisation is untested.</p><p>The detail most worth noting is in the results: at tight tolerances DS-DTW is indeed best (0.1 s: 53.1% vs HDemucs 55.4%; 0.2 s: 29.9% vs 33.0%; 0.5 s: 10.0% vs 10.7%), <strong>but at loose tolerances it loses to HDemucs</strong> (1.0 s: 2.9% vs 2.1%; 2.0 s: 0.6% vs 0.3%). That crossover is informative — it suggests sparse frame selection improves local precision but is more prone to large excursions in passages lacking clear timing cues (sustained notes, held harmonies, ritardandi). The paper emphasises the tight-tolerance win, but the trade-off deserves stating. Note too that every system exceeds 50% error at 0.1 s tolerance, meaning <strong>frame-accurate alignment remains far from solved</strong>. A final practical constraint: the method requires an orchestra-only recording, which is itself an MMO product rather than something freely available.</p></div></section><section class="sec"><h4><span class="zh-only">討論</span><span class="en-only">Discussion</span></h4><div class="body zh-only"><p>這篇最值得帶走的不是那張表，而是<strong>方法論上的姿態</strong>：面對頻譜不匹配，作者沒有加一個更大的分離網路，而是縮小問題——只對齊那些本來就可靠的幀。結果是一個更簡單、更快、且在關鍵區間更準的系統。在目前的研究氛圍下，這是很好的提醒，也是審稿時會加分的敘事。</p><p>可移植性很高。稀疏—稠密的切換邏輯不預設任何音樂類型或樂器，凡是「兩個版本音色差很多但事件時間對得起來」的對齊任務都能試：跨版本的錄音對齊、翻唱歌曲對齊、樂譜—音訊對齊（合成音訊 vs 真實演奏的頻譜差距同樣巨大）、甚至是不同錄音條件下的田野錄音比對。γ 只有一個超參數，你可以在一個下午內把它接到自己既有的 DTW 管線上做消融。</p><p>延伸的研究缺口也清楚。作者自己指出的線上（即時）版本是最直接的一條——稀疏選幀在因果設定下如何做，是個真問題，因為 flux 門檻需要未來幀。另一條是<strong>自適應 γ</strong>：既然失效似乎集中在時間線索稀疏的段落，那 γ 或許不該全曲固定，而應隨局部 flux 分布調整。第三條是把選幀準則從 chroma flux 換成 onset strength 或學習得到的顯著度，看看是否能同時修好寬容忍度下的大幅偏移。此外，作者釋出了四個樂章的小節標註與程式碼（HMC-MIR），這對缺乏標註的協奏曲對齊研究來說本身就是有價值的貢獻，可以直接當成你自己方法的比較基準。</p></div><div class="body en-only"><p>The most transferable thing here is not the results table but the <strong>methodological posture</strong>: faced with spectral mismatch, the authors did not add a bigger separation network — they shrank the problem, aligning only the frames that were reliable to begin with. The result is simpler, faster and more accurate in the range that matters. In the current research climate that is a useful reminder and a narrative that tends to earn goodwill in review.</p><p>It transfers well. The sparse-dense switching logic assumes nothing about genre or instrumentation, so any alignment task where two versions differ sharply in timbre but correspond in event timing is fair game: cross-version recording alignment, cover-song alignment, score-to-audio alignment (synthesised versus performed audio has an equally large spectral gap), even comparing field recordings made under different conditions. With γ as essentially the only hyperparameter, you could bolt it onto an existing DTW pipeline and run an ablation in an afternoon.</p><p>The open gaps are clear too. The online (real-time) version the authors flag is the most direct — and a genuine research question, since a flux threshold needs future frames and must be rethought in a causal setting. A second is <strong>adaptive γ</strong>: if failures concentrate in passages with sparse timing cues, γ arguably should not be fixed across a movement but should track the local flux distribution. A third is swapping the selection criterion from chroma flux to onset strength or a learned saliency, to see whether the large excursions at loose tolerances can be fixed at the same time. Finally, the released measure-level annotations for four movements plus code (HMC-MIR) are a genuine contribution in their own right for a task starved of annotated data, and make a ready baseline for your own methods.</p></div></section>
+  </div>
+</article>
+</div>
+  </div>
+  <div class="empty"><span class="zh-only">沒有符合的論文。</span><span class="en-only">No matching papers.</span></div>
+
+  <footer>
+    <span class="zh-only">主要來源為 arXiv（cs.SD / eess.AS / cs.IR）公開全文，每週一另掃 ISMIR / TISMIR（完全開放獲取）與 ICASSP、IEEE、ACM 的開放部分。標「僅摘要層級」者代表無法取得全文，分析僅根據摘要。</span>
+    <span class="en-only">Mainly open-access arXiv full texts (cs.SD / eess.AS / cs.IR), with a Monday sweep of ISMIR / TISMIR (fully open access) and the open portions of ICASSP, IEEE and ACM. Entries marked &ldquo;abstract-level only&rdquo; had no retrievable full text.</span>
+  </footer>
+</div>
+
+<script>
+  // The freshness banner is computed in the browser, not at build time, because
+  // the failure it reports on is precisely the case where nothing gets rebuilt.
+  // A run that dies before pushing leaves yesterday's page in place; that page
+  // still notices, every time someone opens it.
+  function updateStale() {
+    var el = document.getElementById('stale'); if (!el) { return; }
+    el.hidden = true;
+    var latest = el.dataset.latest; if (!/^\d{4}-\d{2}-\d{2}$/.test(latest)) { return; }
+    var p = latest.split('-'), now = new Date();
+    var days = Math.floor(
+      (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+       Date.UTC(+p[0], +p[1] - 1, +p[2])) / 86400000);
+    if (days < 2) { return; }   // today or yesterday is normal
+    el.innerHTML =
+      '<span class="zh-only"><b>已經 ' + days + ' 天沒有更新。</b>' +
+      '最新一天是 ' + latest + '。每日任務應該每天都會加一天，所以這代表它壞了。</span>' +
+      '<span class="en-only"><b>No update for ' + days + ' days.</b> ' +
+      'The newest day is ' + latest + '. The daily run should add one every day, so this means it is broken.</span>';
+    el.hidden = false;
+  }
+  updateStale();
+
+  var filters = new Set(); var deepOnly = false;
+  function togglePaper(head) { head.parentElement.classList.toggle('open'); }
+  function setAll(open) { document.querySelectorAll('.card').forEach(function (c) { c.classList.toggle('open', open); }); }
+  function toggleLang() { document.body.classList.toggle('lang-zh'); document.body.classList.toggle('lang-en'); }
+  function toggleFilter(btn) {
+    var k = btn.dataset.f, on = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+    if (on) { filters.delete(k); } else { filters.add(k); }
+    applyFilters();
+  }
+  function toggleDeep(btn) {
+    deepOnly = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', deepOnly ? 'true' : 'false');
+    applyFilters();
+  }
+  function applyFilters() {
+    var q = document.getElementById('q').value.trim().toLowerCase(), shown = 0;
+    document.querySelectorAll('.card').forEach(function (c) {
+      var ok = true;
+      if (filters.size && !filters.has(c.dataset.subfield)) ok = false;
+      if (deepOnly && c.dataset.deep !== '1') ok = false;
+      if (ok && q) ok = c.dataset.search.indexOf(q) !== -1;
+      c.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    document.querySelectorAll('.group').forEach(function (g) {
+      var any = Array.prototype.some.call(g.querySelectorAll('.card'), function (c) { return c.style.display !== 'none'; });
+      g.style.display = any ? '' : 'none';
+    });
+    document.body.classList.toggle('no-results', shown === 0);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && document.activeElement.id !== 'q') { e.preventDefault(); document.getElementById('q').focus(); }
+  });
+  // Only the index opts in: there the first group is today, which is the whole
+  // point of the page. On a topic page it would unfold every paper in the topic.
+  var list = document.getElementById('list');
+  if (list && list.dataset.expandFirst === '1') {
+    var firstGroup = list.querySelector('.group');
+    if (firstGroup) firstGroup.querySelectorAll('.card').forEach(function (c) { c.classList.add('open'); });
+  }
+</script>
+</body>
+</html>

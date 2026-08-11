@@ -3,6 +3,10 @@
     python3 verify_site.py                                        # local files
     python3 verify_site.py https://megan8821.github.io/idontwannareadpaper/
 
+The site is one index page showing the latest day plus one page per topic
+holding everything ever read in that subfield, so the checks below assert that
+split: the index stays a single day, and a topic page stays a single topic.
+
 With no argument the local build in this directory is checked; pass a base URL
 to run the same checks against the deployed site.
 """
@@ -48,6 +52,10 @@ with sync_playwright() as p:
     check("no JS errors on load", not errors, errors)
     check("cards rendered", n > 0, n)
     check("latest day expanded", pg.locator(".card.open").count() > 0)
+    # The index is one day; everything older is reached by topic. If a second
+    # group ever appears here the two views have started overlapping.
+    check("index lists exactly one day", pg.locator(".group").count() == 1,
+          pg.locator(".group").count())
     check("sections per card == 5", pg.locator(".sec h4").count() == n * 5,
           pg.locator(".sec h4").count())
     check("zh visible / en hidden", pg.locator(".body.zh-only").first.is_visible()
@@ -57,16 +65,24 @@ with sync_playwright() as p:
     check("lang toggle -> en", pg.locator(".body.en-only").first.is_visible())
     pg.click("#langBtn"); pg.wait_for_timeout(150)
 
-    # searching a card's arXiv ID must at minimum surface that card
-    aid = pg.locator(".card").first.inner_text().split("arXiv:")[1].split(" ")[0].strip()
+    # Read the identifier off the card rather than assuming it is an arXiv one --
+    # non-arXiv sources (TISMIR and friends) are labelled "DOI:", and a hardcoded
+    # "arXiv:" split would raise here and take the whole run down with it.
+    idline = pg.locator(".card").first.locator(".meta.mono").inner_text()
+    aid = idline.split("·")[0].split(":", 1)[1].strip()
     pg.fill("#q", aid); pg.wait_for_timeout(200)
     vis = sum(1 for i in range(n) if pg.locator(".card").nth(i).is_visible())
-    check("search by arXiv ID surfaces that paper",
-          pg.locator(".card").first.is_visible() and 1 <= vis <= n, "%s -> %d" % (aid, vis))
-    # a term unique to one paper must narrow to that one paper
-    pg.fill("#q", "flow-matching rendering"); pg.wait_for_timeout(200)
-    vis1 = sum(1 for i in range(n) if pg.locator(".card").nth(i).is_visible())
-    check("distinctive phrase narrows to one", vis1 == 1, vis1)
+    # An identifier belongs to exactly one paper, so it doubles as the
+    # "search narrows correctly" case. Deriving the term instead of hardcoding a
+    # phrase keeps this working as the index rolls over to a new day.
+    check("search by ID narrows to exactly that paper",
+          pg.locator(".card").first.is_visible() and vis == 1, "%s -> %d" % (aid, vis))
+    # searching a read date must surface that day's papers, now that browsing
+    # by date is gone and search is the only way back to a specific day
+    day = pg.locator(".card").first.locator(".date-tag").inner_text().strip()
+    pg.fill("#q", day); pg.wait_for_timeout(200)
+    check("search by date surfaces that day",
+          sum(1 for i in range(n) if pg.locator(".card").nth(i).is_visible()) == n, day)
     pg.fill("#q", "zzznope"); pg.wait_for_timeout(200)
     check("empty state", pg.locator(".empty").is_visible())
     pg.fill("#q", ""); pg.wait_for_timeout(200)
@@ -81,31 +97,42 @@ with sync_playwright() as p:
     pg.click("text=全部展開"); pg.wait_for_timeout(150)
     check("expand all", pg.locator(".card.open").count() == n)
 
-    # nav to monthly archive and back
-    month_link = pg.locator("nav.site a").first
-    href = month_link.get_attribute("href")
-    check("nav points at archive", href and href.startswith("archive/"), href)
-    month_link.click()
+    # nav to a topic page and back
+    topic_link = pg.locator("nav.site a").first
+    href = topic_link.get_attribute("href")
+    check("nav points at a topic page", href and href.startswith("topics/"), href)
+    topic_link.click()
     pg.wait_for_load_state()
     pg.wait_for_timeout(300)
-    check("monthly page has cards", pg.locator(".card").count() > 0)
+    tn = pg.locator(".card").count()
+    check("topic page has cards", tn > 0, tn)
+    # The point of splitting by topic is that a topic page holds one topic.
+    subfields = pg.eval_on_selector_all(
+        ".card", "els => [...new Set(els.map(e => e.dataset.subfield))]")
+    check("topic page holds exactly one subfield", len(subfields) == 1, subfields)
+    check("topic page matches its filename",
+          href == "topics/%s.html" % subfields[0], "%s vs %s" % (href, subfields))
+    # Expanding a whole topic on load would defeat the purpose, so only the
+    # index opts in to auto-expansion.
+    check("topic page does not auto-expand", pg.locator(".card.open").count() == 0,
+          pg.locator(".card.open").count())
     back = pg.locator('nav.site a[href="../index.html"]')
-    check("monthly page links back", back.count() == 1)
+    check("topic page links back", back.count() == 1)
     back.first.click()
     pg.wait_for_load_state()
     pg.wait_for_timeout(300)
     check("back on index", pg.locator(".card").count() == n)
 
-    # archive index
-    pg.goto(BASE + "archive/index.html")
+    # topics index
+    pg.goto(BASE + "topics/index.html")
     pg.wait_for_timeout(200)
-    check("archive index lists months", pg.locator("li a").count() > 0)
+    check("topics index lists topics", pg.locator("li a").count() > 0)
 
-    # A finished month never grows again, so the freshness banner must not
-    # appear there -- it would report every past month as broken.
+    # A topic goes quiet whenever nothing in it happens to be read, which is not
+    # a broken daily run -- so the freshness banner belongs to the index alone.
     pg.goto(BASE + href)
     pg.wait_for_timeout(200)
-    check("no stale banner on archive pages", pg.locator("#stale").count() == 0)
+    check("no stale banner on topic pages", pg.locator("#stale").count() == 0)
 
     # The freshness banner is the only thing that reports a broken daily run,
     # so drive it at both a fresh and a stale date rather than trusting whatever

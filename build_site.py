@@ -7,9 +7,14 @@ Build the MIR Daily Paper Digest static site from per-day JSON files.
 Defaults: data_dir="data", out_dir="." (repo root)
 
 Reads every data/YYYY-MM-DD.json and writes:
-    index.html               most recent RECENT_DAYS days
-    archive/YYYY-MM.html     one page per month
-    archive/index.html       list of months
+    index.html               the latest day only
+    topics/<subfield>.html   one page per subfield, all days, newest first
+    topics/index.html        list of subfields
+
+The split is deliberate: the front page answers "what is new today", and
+everything ever read is reached by topic instead of by date. Browsing by date
+does not scale -- a year of daily entries is 365 headings to scroll past,
+whereas the topic set stays fixed at six.
 
 Per-day JSON schema:
 {
@@ -50,8 +55,6 @@ import json
 import os
 import sys
 
-RECENT_DAYS = 60
-
 SUBFIELDS = {
     "generative": {"zh": "生成式音樂模型", "en": "Generative Music Models", "color": "#c2410c"},
     "representation": {"zh": "音源分離與表徵學習", "en": "Separation & Representation", "color": "#1d4ed8"},
@@ -90,7 +93,11 @@ def md_inline(text):
 
 
 def load_days(data_dir):
-    """Return {date: [entry, ...]} from data/*.json, ignoring malformed files."""
+    """Return {date: [entry, ...]} from data/*.json, ignoring malformed files.
+
+    Each entry gets a "read_date" key. On a topic page a card no longer sits
+    under a date heading, so it has to carry the date it was read itself.
+    """
     days = {}
     for path in sorted(glob.glob(os.path.join(data_dir, "*.json"))):
         try:
@@ -102,6 +109,8 @@ def load_days(data_dir):
         date = blob.get("date") or os.path.splitext(os.path.basename(path))[0]
         entries = blob.get("entries", [])
         if entries:
+            for e in entries:
+                e["read_date"] = date
             days.setdefault(date, []).extend(entries)
     return days
 
@@ -114,9 +123,12 @@ def render_entry(e):
     deep = bool(e.get("deep"))
     # Everything visible on the card is searchable, the why line included --
     # it is prose the reader can see, so leaving it out makes search lie.
+    # The read date is in here because browsing by date is gone -- searching
+    # "2026-08-10" is now the way to ask what a particular day's papers were.
     search_blob = " ".join([
         e.get("title_en", ""), e.get("title_zh", ""), e.get("authors", ""),
         aid, sf["zh"], sf["en"], e.get("why_zh", ""), e.get("why_en", ""),
+        e.get("read_date", ""),
         *[v.get(k, "") for v in e.get("sections", {}).values() for k in ("zh", "en")],
     ]).lower()
 
@@ -128,6 +140,10 @@ def render_entry(e):
     if not e.get("fulltext_read", True):
         badges.append('<span class="tag warn"><span class="zh-only">僅摘要層級</span>'
                       '<span class="en-only">Abstract-level only</span></span>')
+    # On a topic page the cards are not under a date heading, so each one states
+    # the day it was read. Harmless on the index, where it repeats the heading.
+    if e.get("read_date"):
+        badges.append('<span class="tag date-tag mono">%s</span>' % esc(e["read_date"]))
 
     secs = []
     for key, zh_label, en_label in SECTION_LABELS:
@@ -184,25 +200,34 @@ def render_entry(e):
     )
 
 
-def build_page(days, subtitle_zh, subtitle_en, nav_html, show_stale=False):
-    """days: {date: [entries]} -> full HTML document.
+def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=False,
+               expand_first=False):
+    """Render a full page.
 
-    show_stale belongs to the index only. A monthly archive stops growing once
-    its month ends, so a freshness banner there would report every finished
-    month as broken.
+    groups: [(heading_zh, heading_en, [entry, ...]), ...] in display order. A
+        group is a day on the index and a whole subfield on a topic page.
+    stats: (n_papers, n_days, n_deep, latest) shown in the summary bar. Passed
+        in rather than derived from `groups` so the index can summarise the
+        whole collection while listing only today.
+    show_stale: index only. The banner reports that the daily run has stopped,
+        which is meaningless on a topic page -- a topic goes quiet whenever
+        nothing in it happens to be read, and that is not a failure.
+    expand_first: open the first group's cards on load. Wanted on the index,
+        where the first group is today, but not on a topic page, where it would
+        expand the entire topic's full text at once.
     """
-    dates = sorted(days.keys(), reverse=True)
-    entries = [e for d in dates for e in days[d]]
+    entries = [e for _, _, es in groups for e in es]
 
     blocks = []
-    for d in dates:
-        cards = "\n".join(render_entry(e) for e in days[d])
-        blocks.append('<div class="day" data-date="%s">\n<h2 class="day-head"><span class="date mono">%s</span>'
-                      '<span class="count">%d <span class="zh-only">篇</span><span class="en-only">papers</span>'
-                      '</span></h2>\n%s\n</div>' % (esc(d), esc(d), len(days[d]), cards))
+    for zh, en, es in groups:
+        cards = "\n".join(render_entry(e) for e in es)
+        blocks.append(
+            '<div class="group">\n<h2 class="group-head">'
+            '<span class="label mono zh-only">%s</span><span class="label mono en-only">%s</span>'
+            '<span class="count">%d <span class="zh-only">篇</span><span class="en-only">papers</span>'
+            '</span></h2>\n%s\n</div>' % (esc(zh), esc(en), len(es), cards))
 
-    n_deep = sum(1 for e in entries if e.get("deep"))
-    latest = dates[0] if dates else "-"
+    n_papers, n_days, n_deep, latest = stats
     chips = "".join(
         '<button class="chip" data-f="%s" onclick="toggleFilter(this)"><span class="dot" style="--tag:%s"></span>'
         '<span class="zh-only">%s</span><span class="en-only">%s</span></button>'
@@ -216,8 +241,10 @@ def build_page(days, subtitle_zh, subtitle_en, nav_html, show_stale=False):
     out = TEMPLATE
     for k, v in {
         "subtitle_zh": subtitle_zh, "subtitle_en": subtitle_en, "nav": nav_html,
-        "n_papers": str(len(entries)), "n_days": str(len(dates)), "n_deep": str(n_deep),
-        "latest": esc(latest), "chips": chips, "stale": stale, "days": "\n".join(blocks),
+        "n_papers": str(n_papers), "n_days": str(n_days), "n_deep": str(n_deep),
+        "latest": esc(latest), "chips": chips, "stale": stale,
+        "expand_first": ' data-expand-first="1"' if expand_first else "",
+        "groups": "\n".join(blocks),
     }.items():
         out = out.replace("{{%s}}" % k, v)
     return out
@@ -267,10 +294,10 @@ TEMPLATE = """<!DOCTYPE html>
   .chip[aria-pressed=true], .toggle[aria-pressed=true] { color:var(--ink); border-color:var(--accent);
     box-shadow:inset 0 0 0 1px var(--accent); }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--tag); }
-  .day { margin-bottom:34px; }
-  .day-head { display:flex; align-items:baseline; gap:12px; font-size:1rem; font-weight:600;
+  .group { margin-bottom:34px; }
+  .group-head { display:flex; align-items:baseline; gap:12px; font-size:1rem; font-weight:600;
     padding-bottom:8px; border-bottom:2px solid var(--line); margin:0 0 14px; }
-  .day-head .count { font-weight:400; font-size:.82rem; color:var(--ink2); }
+  .group-head .count { font-weight:400; font-size:.82rem; color:var(--ink2); }
   .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   .card { background:var(--panel); border:1px solid var(--line); border-left:3px solid transparent;
     border-radius:10px; box-shadow:var(--shadow); margin-bottom:14px; overflow:hidden; }
@@ -282,6 +309,8 @@ TEMPLATE = """<!DOCTYPE html>
     color:#fff; background:var(--tag,#475569); }
   .tag.deep { background:var(--deep); }
   .tag.warn { background:var(--warn); }
+  .tag.date-tag { background:transparent; color:var(--ink2); border:1px solid var(--line);
+    text-transform:none; letter-spacing:0; }
   .card h3 { margin:0 0 3px; font-size:1.04rem; line-height:1.45; font-weight:650; }
   .card h3.t-zh { font-size:.95rem; font-weight:500; color:var(--ink2); }
   .meta { font-size:.8rem; color:var(--ink2); }
@@ -340,8 +369,8 @@ TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <div id="list">
-{{days}}
+  <div id="list"{{expand_first}}>
+{{groups}}
   </div>
   <div class="empty"><span class="zh-only">沒有符合的論文。</span><span class="en-only">No matching papers.</span></div>
 
@@ -399,17 +428,22 @@ TEMPLATE = """<!DOCTYPE html>
       c.style.display = ok ? '' : 'none';
       if (ok) shown++;
     });
-    document.querySelectorAll('.day').forEach(function (d) {
-      var any = Array.prototype.some.call(d.querySelectorAll('.card'), function (c) { return c.style.display !== 'none'; });
-      d.style.display = any ? '' : 'none';
+    document.querySelectorAll('.group').forEach(function (g) {
+      var any = Array.prototype.some.call(g.querySelectorAll('.card'), function (c) { return c.style.display !== 'none'; });
+      g.style.display = any ? '' : 'none';
     });
     document.body.classList.toggle('no-results', shown === 0);
   }
   document.addEventListener('keydown', function (e) {
     if (e.key === '/' && document.activeElement.id !== 'q') { e.preventDefault(); document.getElementById('q').focus(); }
   });
-  var firstDay = document.querySelector('.day');
-  if (firstDay) firstDay.querySelectorAll('.card').forEach(function (c) { c.classList.add('open'); });
+  // Only the index opts in: there the first group is today, which is the whole
+  // point of the page. On a topic page it would unfold every paper in the topic.
+  var list = document.getElementById('list');
+  if (list && list.dataset.expandFirst === '1') {
+    var firstGroup = list.querySelector('.group');
+    if (firstGroup) firstGroup.querySelectorAll('.card').forEach(function (c) { c.classList.add('open'); });
+  }
 </script>
 </body>
 </html>"""
@@ -440,54 +474,76 @@ def main():
         return 1
 
     all_dates = sorted(days.keys(), reverse=True)
-    months = sorted({d[:7] for d in all_dates}, reverse=True)
+    all_entries = [e for d in all_dates for e in days[d]]
 
-    os.makedirs(os.path.join(out_dir, "archive"), exist_ok=True)
+    # The summary bar describes the whole collection on every page type, so the
+    # index does not shrink to "3 papers" just because it lists one day, and the
+    # freshness banner keeps reading the real latest date.
+    totals = (len(all_entries), len(all_dates),
+              sum(1 for e in all_entries if e.get("deep")),
+              all_dates[0])
 
-    # index.html — most recent RECENT_DAYS days
-    recent = {d: days[d] for d in all_dates[:RECENT_DAYS]}
-    nav = ['<span class="here">最新 / Recent</span>']
-    nav += ['<a href="archive/%s.html">%s</a>' % (m, m) for m in months[:6]]
-    if len(months) > 6:
-        nav.append('<a href="archive/index.html">全部月份 / all months</a>')
+    # Topics that actually have papers. An empty subfield gets no page and no
+    # nav link rather than a page reading "0 papers".
+    topics = [k for k in SUBFIELDS if any(e.get("subfield") == k for e in all_entries)]
+
+    os.makedirs(os.path.join(out_dir, "topics"), exist_ok=True)
+
+    def topic_nav(current=None):
+        """Nav shared by both page types; `current` marks the page you are on."""
+        prefix = "" if current is None else "../"
+        out = ['<span class="here">最新 / Latest</span>' if current is None
+               else '<a href="../index.html">← 最新 / Latest</a>']
+        for k in topics:
+            label = "%s / %s" % (SUBFIELDS[k]["zh"], SUBFIELDS[k]["en"])
+            out.append('<span class="here">%s</span>' % esc(label) if k == current
+                       else '<a href="%stopics/%s.html">%s</a>' % (prefix, k, esc(label)))
+        return " ".join(out)
+
+    # index.html -- the latest day only
+    latest = all_dates[0]
     index_html = build_page(
-        recent,
-        "音樂資訊檢索每日論文摘要 · 為 megan 整理 · 每篇含動機、背景、方法、限制、討論",
-        "Music Information Retrieval daily digest · curated for megan · motivation, intro, method, limitations, discussion",
-        " ".join(nav), show_stale=True)
+        [(latest, latest, days[latest])],
+        "音樂資訊檢索每日論文摘要 · 為 megan 整理 · 每篇含動機、背景、方法、限制、討論"
+        " · 以往的論文依主題整理，見上方連結",
+        "Music Information Retrieval daily digest · curated for megan · motivation, intro,"
+        " method, limitations, discussion · earlier papers are organised by topic, linked above",
+        topic_nav(), totals, show_stale=True, expand_first=True)
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html)
 
-    # one page per month
-    for m in months:
-        mdays = {d: days[d] for d in all_dates if d.startswith(m)}
-        mnav = ['<a href="../index.html">← 最新 / Recent</a>']
-        mnav += ['<span class="here">%s</span>' % x if x == m else '<a href="%s.html">%s</a>' % (x, x)
-                 for x in months[:6]]
-        mnav.append('<a href="index.html">全部月份 / all months</a>')
-        with open(os.path.join(out_dir, "archive", "%s.html" % m), "w", encoding="utf-8") as f:
-            f.write(build_page(mdays, "%s 月封存" % m, "%s archive" % m, " ".join(mnav)))
+    # one page per topic, every day it ever appeared, newest first
+    for k in topics:
+        es = [e for d in all_dates for e in days[d] if e.get("subfield") == k]
+        dates_in = sorted({e["read_date"] for e in es}, reverse=True)
+        sf = SUBFIELDS[k]
+        stats = (len(es), len(dates_in), sum(1 for e in es if e.get("deep")), dates_in[0])
+        with open(os.path.join(out_dir, "topics", "%s.html" % k), "w", encoding="utf-8") as f:
+            f.write(build_page(
+                [(sf["zh"], sf["en"], es)],
+                "%s · 累積 %d 篇 · 由新到舊" % (sf["zh"], len(es)),
+                "%s · %d papers so far · newest first" % (sf["en"], len(es)),
+                topic_nav(k), stats))
 
-    # archive index
+    # topics index
     rows = "".join(
-        '<li><a href="%s.html">%s</a> — %d <span class="zh-only">篇</span><span class="en-only">papers</span>'
-        ' / %d <span class="zh-only">天</span><span class="en-only">days</span></li>'
-        % (m, m,
-           sum(len(days[d]) for d in all_dates if d.startswith(m)),
-           sum(1 for d in all_dates if d.startswith(m)))
-        for m in months)
-    with open(os.path.join(out_dir, "archive", "index.html"), "w", encoding="utf-8") as f:
+        '<li><a href="%s.html">%s / %s</a> — %d <span class="zh-only">篇</span>'
+        '<span class="en-only">papers</span></li>'
+        % (k, esc(SUBFIELDS[k]["zh"]), esc(SUBFIELDS[k]["en"]),
+           sum(1 for e in all_entries if e.get("subfield") == k))
+        for k in topics)
+    with open(os.path.join(out_dir, "topics", "index.html"), "w", encoding="utf-8") as f:
         f.write("""<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Archive · MIR Daily Paper Digest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Topics · MIR Daily Paper Digest</title>
 <style>body{margin:0;background:#f7f7f5;color:#1a1a1a;font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
 @media(prefers-color-scheme:dark){body{background:#141414;color:#ececec}}
 .wrap{max-width:640px;margin:0 auto;padding:40px 20px}a{color:#8c5a2b}
 @media(prefers-color-scheme:dark){a{color:#d4a373}}ul{padding-left:1.2em}li{margin:.4em 0}</style></head>
-<body><div class="wrap"><h1>封存 / Archive</h1>
-<p><a href="../index.html">← 回到最新 / back to recent</a></p><ul>%s</ul></div></body></html>""" % rows)
+<body><div class="wrap"><h1>主題 / Topics</h1>
+<p><a href="../index.html">← 回到最新 / back to latest</a></p><ul>%s</ul></div></body></html>""" % rows)
 
-    print("built: index.html (%d days, %d papers), %d monthly page(s)"
-          % (len(recent), sum(len(v) for v in recent.values()), len(months)))
+    print("built: index.html (%s, %d papers), %d topic page(s), %d papers total"
+          % (latest, len(days[latest]), len(topics), len(all_entries)))
     return 0
 
 

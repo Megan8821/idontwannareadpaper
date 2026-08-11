@@ -128,7 +128,7 @@ schema 完整定義在 `build_site.py` 開頭的 docstring，照著寫。檔名�
 
 ```
 python3 -c "import json,sys; json.load(open('data/YYYY-MM-DD.json'))"   # 先確定 JSON 合法
-python3 build_site.py                                                  # 重建 index.html 與 archive/
+python3 build_site.py                                                  # 重建 index.html 與 topics/
 ```
 
 `build_site.py` 只用標準函式庫，不需要裝任何東西。它跑得過、而且新的三篇有出現在
@@ -141,7 +141,7 @@ python3 build_site.py                                                  # 重建 
 
 ### 8. 推上 main
 
-把新的 `data/YYYY-MM-DD.json` 連同重建出來的 `index.html`、`archive/` 一起 commit，
+把新的 `data/YYYY-MM-DD.json` 連同重建出來的 `index.html`、`topics/` 一起 commit，
 直接推 `main`。Actions 會自己跑 build 與部署——它是從 `data/` 重建，所以就算
 commit 進去的 HTML 有出入也以 CI 的產物為準，但保持 repo 內容一致還是比較好追。
 
