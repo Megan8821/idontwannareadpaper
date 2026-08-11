@@ -33,7 +33,14 @@ jobs:
         with:
           enablement: true
 
+      # Data-layer checks first: they need no browser and finish in milliseconds,
+      # so bad JSON or a mistyped subfield fails here rather than after the
+      # Playwright download further down.
+      - name: Unit tests
+        run: python3 -m unittest discover -v
+
       # Rebuild from data/*.json so adding a day only means committing one JSON file.
+      # The build refuses on invalid data, so this step is also the schema gate.
       - name: Build site
         run: python3 build_site.py data _site
 

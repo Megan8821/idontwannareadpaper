@@ -124,17 +124,25 @@ Open Journal 是完全開放的，抓得到。
 schema 完整定義在 `build_site.py` 開頭的 docstring，照著寫。檔名是
 `data/YYYY-MM-DD.json`，日期用台北時間。
 
+**schema 現在是強制的，不是建議。** `build_site.py` 會先驗證再產出，不合格就
+直接拒絕 build（回傳 1），錯誤訊息會指出是哪一天、第幾篇、哪個欄位。會被擋下來的
+包含：必填欄位空白、`subfield` 打錯字（以前會安靜地歸到「其他」）、五個 section
+少一個或某個語言是空的、`deep`／`fulltext_read` 不是布林值、`source_label` 設了
+但沒設 `source_url`、`arxiv_id` 跟以前重複、JSON 讀不起來、檔名跟裡面的 `date`
+不一致。所以不用再自己寫一行 `json.load` 去確認合法，跑下面那兩個指令就夠了。
+
 ### 7. 重建
 
 ```
-python3 -c "import json,sys; json.load(open('data/YYYY-MM-DD.json'))"   # 先確定 JSON 合法
+python3 -m unittest discover                                           # 資料層檢查，毫秒級
 python3 build_site.py                                                  # 重建 index.html 與 topics/
 ```
 
-`build_site.py` 只用標準函式庫，不需要裝任何東西。它跑得過、而且新的三篇有出現在
+兩者都只用標準函式庫，不需要裝任何東西。單元測試（44 項）跑完不到一秒，涵蓋
+schema 驗證、去重、連結產生與頁面切分；它跟 build 都過了、而且新的三篇有出現在
 `index.html` 裡，就夠格推上去了。
 
-21 項瀏覽器檢查由 GitHub Actions 負責，不在這裡跑。真的想在本地跑也可以
+瀏覽器檢查（35 項）由 GitHub Actions 負責，不在這裡跑。真的想在本地跑也可以
 （`pip install playwright` 之後 `python3 verify_site.py`），但**那是可選的，裝不起來
 就別裝**，不要讓它擋住當天的產出。順帶一提，容器裡的 Chromium 連不到外網，所以
 `verify_site.py` 吃線上網址的那個模式在這裡跑不起來，要確認線上狀態就用 `curl`。

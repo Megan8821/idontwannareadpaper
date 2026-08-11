@@ -11,9 +11,15 @@ index.html            當天的三篇（主頁）
 topics/<子領域>.html   該子領域讀過的全部論文，由新到舊
 topics/index.html     子領域列表
 data/YYYY-MM-DD.json  每天的原始資料 ← 真正的資料庫在這裡
-build_site.py         從 data/ 產生所有 HTML
+build_site.py         從 data/ 產生所有 HTML，並在產出前驗證資料
+test_build_site.py    資料層單元測試（標準函式庫，不需要瀏覽器）
+verify_site.py        瀏覽器檢查，由 CI 跑
 .nojekyll             告訴 GitHub Pages 不要跑 Jekyll
 ```
+
+兩層檢查分工不同：`test_build_site.py` 問「資料合不合格、每塊該產出什麼」，
+`verify_site.py` 問「產出來的網站在瀏覽器裡對不對」。前者毫秒級且不需要瀏覽器，
+所以 CI 先跑它——資料錯了就不用等 Playwright 裝完才知道。
 
 主頁只放當天，因為依日期瀏覽撐不住：累積一年就是 365 個日期標題要滑過去，
 而子領域固定就那六個。過了今天的論文一律從主題頁進去找，
@@ -60,6 +66,14 @@ python3 build_site.py data .
 沒有任何論文的子領域不會產生頁面。
 
 **加一天**：在 `data/` 放一個新的 JSON（格式見 `build_site.py` 開頭的說明），重跑一次就好。
+schema 是強制的——欄位缺漏、`subfield` 打錯字、section 少一個、`arxiv_id` 重複，
+都會讓 build 直接失敗並指出是哪一篇，不會安靜地產出一個看起來正常但其實錯的頁面。
+
+**跑測試**：
+
+```bash
+python3 -m unittest discover        # 資料層，44 項，不到一秒
+```
 
 ## 資料格式
 

@@ -72,6 +72,14 @@ SECTION_LABELS = [
     ("discussion", "討論", "Discussion"),
 ]
 
+SECTION_KEYS = tuple(k for k, _, _ in SECTION_LABELS)
+
+# Every entry must carry these. The renderer defaults most of them away, which
+# is the problem: a missing title or a mistyped subfield produces a page that
+# looks fine and is quietly wrong, so the build refuses instead.
+REQUIRED_FIELDS = ("arxiv_id", "title_en", "title_zh", "authors", "submitted",
+                   "categories", "subfield", "why_zh", "why_en")
+
 
 def esc(text):
     return htmllib.escape(text or "", quote=True)
@@ -93,26 +101,108 @@ def md_inline(text):
 
 
 def load_days(data_dir):
-    """Return {date: [entry, ...]} from data/*.json, ignoring malformed files.
+    """Return ({date: [entry, ...]}, [problem, ...]) from data/*.json.
 
     Each entry gets a "read_date" key. On a topic page a card no longer sits
     under a date heading, so it has to carry the date it was read itself.
+
+    An unreadable file is reported rather than skipped. Skipping it would drop a
+    whole day out of the site while the build still succeeded -- a stray comma in
+    today's JSON would look exactly like a day nobody wrote.
     """
     days = {}
+    problems = []
     for path in sorted(glob.glob(os.path.join(data_dir, "*.json"))):
+        name = os.path.basename(path)
         try:
             with open(path, encoding="utf-8") as f:
                 blob = json.load(f)
         except (ValueError, OSError) as exc:
-            sys.stderr.write("skipping %s: %s\n" % (path, exc))
+            problems.append("%s: cannot be read (%s)" % (name, exc))
             continue
-        date = blob.get("date") or os.path.splitext(os.path.basename(path))[0]
-        entries = blob.get("entries", [])
-        if entries:
-            for e in entries:
-                e["read_date"] = date
-            days.setdefault(date, []).extend(entries)
-    return days
+        if not isinstance(blob, dict):
+            problems.append("%s: top level must be an object" % name)
+            continue
+        stem = os.path.splitext(name)[0]
+        date = blob.get("date") or stem
+        if blob.get("date") and blob["date"] != stem:
+            problems.append("%s: date field says %s but the filename says %s"
+                            % (name, blob["date"], stem))
+        entries = blob.get("entries")
+        if not entries:
+            problems.append("%s: no entries" % name)
+            continue
+        if not isinstance(entries, list):
+            problems.append("%s: entries must be a list" % name)
+            continue
+        for e in entries:
+            if not isinstance(e, dict):
+                problems.append("%s: every entry must be an object" % name)
+                continue
+            e["read_date"] = date
+            days.setdefault(date, []).append(e)
+    return days, problems
+
+
+def validate_days(days):
+    """Return a list of problems with the loaded entries; empty means sound.
+
+    The renderer is forgiving by design -- it defaults a missing field away and
+    falls back to the "other" subfield -- so nothing downstream notices bad data.
+    This is what notices.
+    """
+    problems = []
+    seen = {}
+    for date in sorted(days):
+        for i, e in enumerate(days[date]):
+            aid = e.get("arxiv_id")
+            where = "%s entry %d" % (date, i + 1)
+            if aid:
+                where += " (%s)" % aid
+
+            for field in REQUIRED_FIELDS:
+                if not str(e.get(field, "") or "").strip():
+                    problems.append("%s: %s is missing or empty" % (where, field))
+
+            sf = e.get("subfield")
+            if sf and sf not in SUBFIELDS:
+                problems.append("%s: unknown subfield %r -- expected one of %s"
+                                % (where, sf, ", ".join(SUBFIELDS)))
+
+            secs = e.get("sections")
+            if not isinstance(secs, dict):
+                problems.append("%s: sections is missing" % where)
+            else:
+                for key in SECTION_KEYS:
+                    body = secs.get(key)
+                    if not isinstance(body, dict):
+                        problems.append("%s: sections.%s is missing" % (where, key))
+                        continue
+                    for lang in ("zh", "en"):
+                        if not str(body.get(lang, "") or "").strip():
+                            problems.append("%s: sections.%s.%s is empty" % (where, key, lang))
+                for key in secs:
+                    if key not in SECTION_KEYS:
+                        problems.append("%s: unexpected section %r" % (where, key))
+
+            for flag in ("deep", "fulltext_read"):
+                if flag in e and not isinstance(e[flag], bool):
+                    problems.append("%s: %s must be true or false, got %r"
+                                    % (where, flag, e[flag]))
+
+            # source_label only ever renders alongside source_url, so setting it
+            # alone means a link was meant to point somewhere and does not.
+            if e.get("source_label") and not e.get("source_url"):
+                problems.append("%s: source_label set without source_url" % where)
+
+            # Three papers nobody has read yet is the whole premise, and only
+            # this enforces it.
+            if aid:
+                if aid in seen:
+                    problems.append("%s: already read on %s" % (where, seen[aid]))
+                else:
+                    seen[aid] = date
+    return problems
 
 
 def render_entry(e):
@@ -517,28 +607,17 @@ TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
-def main():
-    data_dir = sys.argv[1] if len(sys.argv) > 1 else "data"
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else "."
-    days = load_days(data_dir)
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    data_dir = argv[0] if len(argv) > 0 else "data"
+    out_dir = argv[1] if len(argv) > 1 else "."
+    days, problems = load_days(data_dir)
+    problems += validate_days(days)
+    if problems:
+        sys.stderr.write("bad data, refusing to build:\n  %s\n" % "\n  ".join(problems))
+        return 1
     if not days:
         sys.stderr.write("no data files found in %s\n" % data_dir)
-        return 1
-
-    # The whole premise is three papers nobody has read yet, deduplicated by
-    # arXiv ID. Nothing else enforces that, so a repeat fails the build rather
-    # than quietly shipping the same paper twice.
-    seen = {}
-    repeats = []
-    for date in sorted(days):
-        for e in days[date]:
-            aid = e.get("arxiv_id", "")
-            if aid and aid in seen:
-                repeats.append("%s appears on %s and again on %s" % (aid, seen[aid], date))
-            elif aid:
-                seen[aid] = date
-    if repeats:
-        sys.stderr.write("duplicate papers:\n  %s\n" % "\n  ".join(repeats))
         return 1
 
     all_dates = sorted(days.keys(), reverse=True)

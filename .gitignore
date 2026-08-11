@@ -1,0 +1,6 @@
+# Byte-cache from importing build_site (the tests do), never part of the site.
+__pycache__/
+*.pyc
+
+# CI builds the site into _site/; the committed copy lives at the repo root.
+_site/
