@@ -44,10 +44,6 @@
     background:color-mix(in srgb, var(--warn) 12%, var(--panel));
     border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
   .stale b { color:var(--warn); }
-  .stats { display:flex; gap:26px; flex-wrap:wrap; padding:14px 18px; background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
-  .stat b { display:block; font-size:var(--fs-lg); line-height:1.2; font-variant-numeric:tabular-nums; }
-  .stat span { font-size:var(--fs-xs); color:var(--ink2); text-transform:uppercase; letter-spacing:.06em; }
   .controls { position:sticky; top:0; z-index:10; background:var(--bg); padding:12px 0 14px;
     border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:10px; }
   input[type=search] { width:100%; padding:11px 14px; font-size:var(--fs-md); color:var(--ink);
@@ -146,13 +142,6 @@
   <nav class="site"><a href="../index.html"><span class="zh-only">← 最新</span><span class="en-only">← Latest</span></a> <a href="../topics/generative.html"><span class="zh-only">生成式音樂模型</span><span class="en-only">Generative Music Models</span></a> <a href="../topics/representation.html"><span class="zh-only">音源分離與表徵學習</span><span class="en-only">Separation &amp; Representation</span></a> <span class="here"><span class="zh-only">轉譜與音高分析</span><span class="en-only">Transcription &amp; Pitch</span></span> <a href="../topics/retrieval.html"><span class="zh-only">檢索、推薦與情緒</span><span class="en-only">Retrieval, RecSys &amp; Emotion</span></a></nav>
 
   
-
-  <div class="stats">
-    <div class="stat"><b>4</b><span class="zh-only">論文</span><span class="en-only">papers</span></div>
-    <div class="stat"><b>4</b><span class="zh-only">天數</span><span class="en-only">days</span></div>
-    <div class="stat"><b>2</b><span class="zh-only">深度分析</span><span class="en-only">deep dives</span></div>
-    <div class="stat"><b class="mono">2026-08-12</b><span class="zh-only">最新</span><span class="en-only">latest</span></div>
-  </div>
 
   <div class="controls">
     <input type="search" id="q" aria-label="搜尋論文 / Search papers"

@@ -314,7 +314,7 @@ class TestSearchIndex(unittest.TestCase):
 
     def test_script_cannot_be_broken_out_of(self):
         html = bs.build_page(
-            [("g", "g", [entry()])], "s", "s", "", (1, 1, 0, "2026-08-01"),
+            [("g", "g", [entry()])], "s", "s", "",
             index_data=bs.search_index([entry(title_en="</script><img onerror=x>")]))
         self.assertNotIn("</script><img", html)
         self.assertIn("\\u003c/script", html)
@@ -339,24 +339,17 @@ class TestMdInline(unittest.TestCase):
 class TestBuildPage(unittest.TestCase):
     def page(self, **kw):
         kw.setdefault("groups", [("標題", "Heading", [entry()])])
-        kw.setdefault("stats", (1, 1, 0, "2026-08-01"))
         return bs.build_page(kw["groups"], "zh sub", "en sub", "<nav></nav>",
-                             kw["stats"], show_stale=kw.get("show_stale", False),
-                             expand_first=kw.get("expand_first", False))
+                             show_stale=kw.get("show_stale", False),
+                             expand_first=kw.get("expand_first", False),
+                             latest=kw.get("latest", ""))
 
     def test_no_placeholders_left(self):
         self.assertNotIn("{{", self.page())
 
-    def test_stats_are_passed_through_not_derived(self):
-        html = self.page(stats=(12, 4, 6, "2026-08-11"))
-        self.assertIn("<b>12</b>", html)
-        self.assertIn("<b>4</b>", html)
-        self.assertIn("<b>6</b>", html)
-        self.assertIn("2026-08-11", html)
-
     def test_stale_banner_only_when_asked(self):
         self.assertNotIn('id="stale"', self.page())
-        html = self.page(show_stale=True, stats=(1, 1, 0, "2026-08-01"))
+        html = self.page(show_stale=True, latest="2026-08-01")
         self.assertIn('id="stale"', html)
         self.assertIn('data-latest="2026-08-01"', html)
 

@@ -322,15 +322,14 @@ def search_index(all_entries):
     } for e in all_entries]
 
 
-def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=False,
-               expand_first=False, index_data=None, link_prefix=""):
+def build_page(groups, subtitle_zh, subtitle_en, nav_html, show_stale=False,
+               expand_first=False, index_data=None, link_prefix="", latest=""):
     """Render a full page.
 
     groups: [(heading_zh, heading_en, [entry, ...]), ...] in display order. A
         group is a day on the index and a whole subfield on a topic page.
-    stats: (n_papers, n_days, n_deep, latest) shown in the summary bar. Passed
-        in rather than derived from `groups` so the index can summarise the
-        whole collection while listing only today.
+    latest: newest date in the whole collection, for the freshness banner. Only
+        meaningful with show_stale.
     show_stale: index only. The banner reports that the daily run has stopped,
         which is meaningless on a topic page -- a topic goes quiet whenever
         nothing in it happens to be read, and that is not a failure.
@@ -353,7 +352,6 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
             '<span class="count">%d <span class="zh-only">篇</span><span class="en-only">papers</span>'
             '</span></h2>\n%s\n</div>' % (esc(zh), esc(en), len(es), cards))
 
-    n_papers, n_days, n_deep, latest = stats
     chips = "".join(
         '<button class="chip" data-f="%s" onclick="toggleFilter(this)"><span class="dot" style="--tag:%s"></span>'
         '<span class="zh-only">%s</span><span class="en-only">%s</span></button>'
@@ -371,8 +369,7 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
     out = TEMPLATE
     for k, v in {
         "subtitle_zh": subtitle_zh, "subtitle_en": subtitle_en, "nav": nav_html,
-        "n_papers": str(n_papers), "n_days": str(n_days), "n_deep": str(n_deep),
-        "latest": esc(latest), "chips": chips, "stale": stale,
+        "chips": chips, "stale": stale,
         "expand_first": ' data-expand-first="1"' if expand_first else "",
         "groups": "\n".join(blocks),
         "search_index": payload, "link_prefix": json.dumps(link_prefix),
@@ -430,10 +427,6 @@ TEMPLATE = """<!DOCTYPE html>
     background:color-mix(in srgb, var(--warn) 12%, var(--panel));
     border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
   .stale b { color:var(--warn); }
-  .stats { display:flex; gap:26px; flex-wrap:wrap; padding:14px 18px; background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
-  .stat b { display:block; font-size:var(--fs-lg); line-height:1.2; font-variant-numeric:tabular-nums; }
-  .stat span { font-size:var(--fs-xs); color:var(--ink2); text-transform:uppercase; letter-spacing:.06em; }
   .controls { position:sticky; top:0; z-index:10; background:var(--bg); padding:12px 0 14px;
     border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:10px; }
   input[type=search] { width:100%; padding:11px 14px; font-size:var(--fs-md); color:var(--ink);
@@ -532,13 +525,6 @@ TEMPLATE = """<!DOCTYPE html>
   <nav class="site">{{nav}}</nav>
 
   {{stale}}
-
-  <div class="stats">
-    <div class="stat"><b>{{n_papers}}</b><span class="zh-only">論文</span><span class="en-only">papers</span></div>
-    <div class="stat"><b>{{n_days}}</b><span class="zh-only">天數</span><span class="en-only">days</span></div>
-    <div class="stat"><b>{{n_deep}}</b><span class="zh-only">深度分析</span><span class="en-only">deep dives</span></div>
-    <div class="stat"><b class="mono">{{latest}}</b><span class="zh-only">最新</span><span class="en-only">latest</span></div>
-  </div>
 
   <div class="controls">
     <input type="search" id="q" aria-label="搜尋論文 / Search papers"
@@ -760,13 +746,6 @@ def main(argv=None):
     all_dates = sorted(days.keys(), reverse=True)
     all_entries = [e for d in all_dates for e in days[d]]
 
-    # The summary bar describes the whole collection on every page type, so the
-    # index does not shrink to "3 papers" just because it lists one day, and the
-    # freshness banner keeps reading the real latest date.
-    totals = (len(all_entries), len(all_dates),
-              sum(1 for e in all_entries if e.get("deep")),
-              all_dates[0])
-
     # Topics that actually have papers. An empty subfield gets no page and no
     # nav link rather than a page reading "0 papers".
     topics = [k for k in SUBFIELDS if any(e.get("subfield") == k for e in all_entries)]
@@ -801,23 +780,21 @@ def main(argv=None):
         " · 以往的論文依主題整理，見上方連結",
         "Music Information Retrieval daily digest · curated for megan · motivation, intro,"
         " method, limitations, discussion · earlier papers are organised by topic, linked above",
-        topic_nav(), totals, show_stale=True, expand_first=True,
-        index_data=idx, link_prefix="topics/")
+        topic_nav(), show_stale=True, expand_first=True,
+        index_data=idx, link_prefix="topics/", latest=latest)
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html)
 
     # one page per topic, every day it ever appeared, newest first
     for k in topics:
         es = [e for d in all_dates for e in days[d] if e.get("subfield") == k]
-        dates_in = sorted({e["read_date"] for e in es}, reverse=True)
         sf = SUBFIELDS[k]
-        stats = (len(es), len(dates_in), sum(1 for e in es if e.get("deep")), dates_in[0])
         with open(os.path.join(out_dir, "topics", "%s.html" % k), "w", encoding="utf-8") as f:
             f.write(build_page(
                 [(sf["zh"], sf["en"], es)],
                 "%s · 累積 %d 篇 · 由新到舊" % (sf["zh"], len(es)),
                 "%s · %d papers so far · newest first" % (sf["en"], len(es)),
-                topic_nav(k), stats, index_data=idx))
+                topic_nav(k), index_data=idx))
 
     # No topics/index.html: the nav already lists every topic on every page, so
     # a separate list of them was a page nothing linked to.
