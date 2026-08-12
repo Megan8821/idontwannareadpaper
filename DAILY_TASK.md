@@ -33,7 +33,7 @@ git push --dry-run origin HEAD:refs/heads/main
 
 任何一個失敗就不要往下做，直接跳到第 9 節，把錯誤訊息完整回報出來。
 
-**不需要在這裡跑 `verify_site.py`。** 那 21 項瀏覽器檢查已經搬到 GitHub Actions 裡，
+**不需要在這裡跑 `verify_site.py`。** 那 39 項瀏覽器檢查已經搬到 GitHub Actions 裡，
 push 之後 CI 會自己跑，沒過就不會部署而且你會看到紅燈。這個工作階段不需要
 Playwright，也不需要瀏覽器——過去嘗試在這裡裝 Playwright 是失敗的主因之一。
 
@@ -138,11 +138,11 @@ python3 -m unittest discover                                           # 資料�
 python3 build_site.py                                                  # 重建 index.html 與 topics/
 ```
 
-兩者都只用標準函式庫，不需要裝任何東西。單元測試（44 項）跑完不到一秒，涵蓋
+兩者都只用標準函式庫，不需要裝任何東西。單元測試（53 項）跑完不到一秒，涵蓋
 schema 驗證、去重、連結產生與頁面切分；它跟 build 都過了、而且新的三篇有出現在
 `index.html` 裡，就夠格推上去了。
 
-瀏覽器檢查（35 項）由 GitHub Actions 負責，不在這裡跑。真的想在本地跑也可以
+瀏覽器檢查（39 項）由 GitHub Actions 負責，不在這裡跑。真的想在本地跑也可以
 （`pip install playwright` 之後 `python3 verify_site.py`），但**那是可選的，裝不起來
 就別裝**，不要讓它擋住當天的產出。順帶一提，容器裡的 Chromium 連不到外網，所以
 `verify_site.py` 吃線上網址的那個模式在這裡跑不起來，要確認線上狀態就用 `curl`。
@@ -155,7 +155,7 @@ commit 進去的 HTML 有出入也以 CI 的產物為準，但保持 repo 內容
 
 推完確認兩件事：
 
-- workflow「Build and deploy site」跑完是 success。它會 build、跑 21 項瀏覽器檢查、
+- workflow「Build and deploy site」跑完是 success。它會跑單元測試與 build、跑 39 項瀏覽器檢查、
   然後部署——檢查沒過就不會部署，所以紅燈代表網站沒更新，要處理
 - `curl -sI https://megan8821.github.io/idontwannareadpaper/` 回 200
 

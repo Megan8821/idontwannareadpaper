@@ -152,10 +152,39 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     check("back on index", pg.locator(".card").count() == n)
 
-    # topics index
-    pg.goto(BASE + "topics/index.html")
-    pg.wait_for_timeout(200)
-    check("topics index lists topics", pg.locator("li a").count() > 0)
+    # Cross-page search. The index is one day, so without this a search for a
+    # paper the site definitely has reports "no matching papers".
+    away = pg.evaluate(
+        """() => {
+             const here = new Set([...document.querySelectorAll('[data-paper-id]')]
+                                  .map(e => e.dataset.paperId));
+             const p = PAPER_INDEX.find(x => !here.has(x.i));
+             return p ? {title: p.t, id: p.i, anchor: p.a, sf: p.f} : null;
+           }""")
+    check("index carries papers from other pages", away is not None, away)
+    if away:
+        pg.fill("#q", away["title"]); pg.wait_for_timeout(250)
+        box = pg.locator("#elsewhere")
+        check("search finds papers on other pages", box.is_visible())
+        link = box.locator("a").first
+        check("the off-page hit links to its topic page",
+              (link.get_attribute("href") or "").startswith("topics/%s.html#" % away["sf"]),
+              link.get_attribute("href"))
+        # A search that matches nothing anywhere must still say so.
+        pg.fill("#q", "zzznope"); pg.wait_for_timeout(250)
+        check("no-match search still shows the empty state",
+              pg.locator(".empty").is_visible() and not box.is_visible())
+
+        pg.fill("#q", away["title"]); pg.wait_for_timeout(250)
+        box.locator("a").first.click()
+        pg.wait_for_load_state()
+        pg.wait_for_timeout(350)
+        target = pg.locator("#" + away["anchor"])
+        check("following it opens that paper", target.count() == 1
+              and "open" in (target.get_attribute("class") or ""),
+              target.get_attribute("class") if target.count() else "missing")
+        pg.goto(INDEX)
+        pg.wait_for_timeout(200)
 
     # A topic goes quiet whenever nothing in it happens to be read, which is not
     # a broken daily run -- so the freshness banner belongs to the index alone.

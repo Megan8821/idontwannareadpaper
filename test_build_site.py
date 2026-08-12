@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -253,6 +254,72 @@ class TestRenderEntry(unittest.TestCase):
         self.assertEqual(html.count('<section class="sec">'), 5)
 
 
+class TestAnchor(unittest.TestCase):
+    def test_arxiv_id(self):
+        self.assertEqual(bs.anchor("2608.03920"), "p-2608-03920")
+
+    def test_doi_is_fragment_safe(self):
+        # Dots and slashes cannot go into a URL fragment as-is.
+        a = bs.anchor("10.5334/tismir.368")
+        self.assertEqual(a, "p-10-5334-tismir-368")
+        self.assertRegex(a, r"^p-[a-z0-9-]+$")
+
+    def test_empty_id_still_yields_an_anchor(self):
+        self.assertEqual(bs.anchor(""), "p-unknown")
+        self.assertEqual(bs.anchor(None), "p-unknown")
+
+    def test_distinct_ids_give_distinct_anchors(self):
+        ids = ["2608.03920", "10.5334/tismir.368", "2608.06928"]
+        self.assertEqual(len({bs.anchor(i) for i in ids}), len(ids))
+
+
+class TestSearchIndex(unittest.TestCase):
+    def test_carries_what_search_needs_and_no_prose(self):
+        e = entry(read_date="2026-08-10")
+        [rec] = bs.search_index([e])
+        self.assertEqual(rec["i"], e["arxiv_id"])
+        self.assertEqual(rec["a"], bs.anchor(e["arxiv_id"]))
+        self.assertEqual(rec["f"], "generative")
+        self.assertEqual(rec["d"], "2026-08-10")
+        self.assertEqual(rec["t"], e["title_en"])
+        # The analysis must not be in here; every page carries this payload.
+        self.assertNotIn("sections", rec)
+        blob = json.dumps(rec, ensure_ascii=False)
+        self.assertNotIn("中文method", blob)
+        self.assertNotIn(e["why_zh"], blob)
+
+    def test_stays_compact(self):
+        """Guards the payload that ships on every page against creeping growth."""
+        recs = bs.search_index([entry(arxiv_id="x%d" % i) for i in range(50)])
+        per = len(json.dumps(recs, ensure_ascii=False, separators=(",", ":"))) / 50
+        self.assertLess(per, 400, "%.0f bytes per paper" % per)
+
+    def test_embedded_in_every_page(self):
+        with DataDir() as d:
+            d.day("2026-08-01", [entry(arxiv_id="a", subfield="generative",
+                                       title_en="Alpha Paper")])
+            d.day("2026-08-02", [entry(arxiv_id="b", subfield="retrieval",
+                                       title_en="Beta Paper")])
+            out = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, out, True)
+            with contextlib.redirect_stdout(io.StringIO()):
+                bs.main([d.path, out])
+        for page in ("index.html", "topics/generative.html", "topics/retrieval.html"):
+            with open(os.path.join(out, *page.split("/")), encoding="utf-8") as f:
+                src = f.read()
+            with self.subTest(page=page):
+                # Both papers findable from anywhere, including the one not shown here.
+                self.assertIn("Alpha Paper", src)
+                self.assertIn("Beta Paper", src)
+
+    def test_script_cannot_be_broken_out_of(self):
+        html = bs.build_page(
+            [("g", "g", [entry()])], "s", "s", "", (1, 1, 0, "2026-08-01"),
+            index_data=bs.search_index([entry(title_en="</script><img onerror=x>")]))
+        self.assertNotIn("</script><img", html)
+        self.assertIn("\\u003c/script", html)
+
+
 class TestMdInline(unittest.TestCase):
     def test_bold_and_code(self):
         self.assertIn("<strong>x</strong>", bs.md_inline("a **x** b"))
@@ -329,9 +396,12 @@ class TestMainEndToEnd(unittest.TestCase):
             code, out = self.build(d.path)
         self.assertEqual(code, 0)
         index = self.read(out, "index.html")
-        self.assertIn("Newest Paper", index)
-        self.assertNotIn("Older Paper", index)
         self.assertEqual(index.count('<article class="card'), 1)
+        self.assertIn('data-paper-id="new"', index)
+        self.assertNotIn('data-paper-id="old"', index)
+        # ...but yesterday's paper is still findable from here, which is the
+        # point of the cross-page index.
+        self.assertIn("Older Paper", index)
 
     def test_topic_page_holds_every_day_of_that_subfield_only(self):
         with DataDir() as d:
@@ -344,10 +414,11 @@ class TestMainEndToEnd(unittest.TestCase):
             code, out = self.build(d.path)
         self.assertEqual(code, 0)
         gen = self.read(out, "topics", "generative.html")
-        self.assertIn("Gen One", gen)
-        self.assertIn("Gen Two", gen)
-        self.assertNotIn("Ret One", gen)
+        self.assertIn('data-paper-id="g1"', gen)
+        self.assertIn('data-paper-id="g2"', gen)
+        self.assertNotIn('data-paper-id="r1"', gen)
         self.assertNotIn('data-subfield="retrieval"', gen)
+        self.assertEqual(gen.count('<article class="card'), 2)
 
     def test_only_topics_with_papers_get_a_page(self):
         with DataDir() as d:
@@ -356,7 +427,37 @@ class TestMainEndToEnd(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(os.path.exists(os.path.join(out, "topics", "generative.html")))
         self.assertFalse(os.path.exists(os.path.join(out, "topics", "cluster.html")))
-        self.assertNotIn("cluster", self.read(out, "topics", "index.html"))
+        self.assertNotIn("cluster.html", self.read(out, "index.html"))
+
+    def test_every_generated_page_is_reachable_from_the_index(self):
+        """A page nothing links to is a page nobody finds -- topics/index.html
+        was exactly that, and only a direct goto in the browser checks saw it."""
+        with DataDir() as d:
+            d.day("2026-08-01", [entry(arxiv_id="a", subfield="generative"),
+                                 entry(arxiv_id="b", subfield="retrieval")])
+            code, out = self.build(d.path)
+        self.assertEqual(code, 0)
+
+        written = set()
+        for root, _, files in os.walk(out):
+            for f in files:
+                if f.endswith(".html"):
+                    written.add(os.path.relpath(os.path.join(root, f), out).replace(os.sep, "/"))
+
+        reached, queue = {"index.html"}, ["index.html"]
+        while queue:
+            page = queue.pop()
+            with open(os.path.join(out, page), encoding="utf-8") as fh:
+                body = fh.read()
+            base = os.path.dirname(page)
+            for href in re.findall(r'href="([^"#?]+\.html)[^"]*"', body):
+                target = os.path.normpath(os.path.join(base, href)).replace(os.sep, "/")
+                if target in written and target not in reached:
+                    reached.add(target)
+                    queue.append(target)
+
+        self.assertEqual(written - reached, set(),
+                         "unreachable page(s): %s" % sorted(written - reached))
 
     def test_topic_pages_carry_no_stale_banner(self):
         with DataDir() as d:

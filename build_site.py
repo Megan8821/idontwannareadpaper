@@ -9,7 +9,6 @@ Defaults: data_dir="data", out_dir="." (repo root)
 Reads every data/YYYY-MM-DD.json and writes:
     index.html               the latest day only
     topics/<subfield>.html   one page per subfield, all days, newest first
-    topics/index.html        list of subfields
 
 The split is deliberate: the front page answers "what is new today", and
 everything ever read is reached by topic instead of by date. Browsing by date
@@ -53,6 +52,7 @@ import glob
 import html as htmllib
 import json
 import os
+import re
 import sys
 
 SUBFIELDS = {
@@ -73,6 +73,12 @@ SECTION_LABELS = [
 ]
 
 SECTION_KEYS = tuple(k for k, _, _ in SECTION_LABELS)
+
+
+def anchor(arxiv_id):
+    """Stable in-page anchor for a paper. DOIs carry dots and slashes, so the
+    identifier cannot go into a fragment as-is."""
+    return "p-" + (re.sub(r"[^a-z0-9]+", "-", (arxiv_id or "").lower()).strip("-") or "unknown")
 
 # Every entry must carry these. The renderer defaults most of them away, which
 # is the problem: a missing title or a mistyped subfield produces a page that
@@ -266,7 +272,7 @@ def render_entry(e):
                  '<a href="https://www.semanticscholar.org/search?q=%s" target="_blank" '
                  'rel="noopener">cited by</a>') % (esc(aid), esc(aid), esc(aid), esc(aid))
 
-    return """<article class="card%s" data-subfield="%s" data-deep="%s" data-search="%s">
+    return """<article class="card%s" id="%s" data-paper-id="%s" data-subfield="%s" data-deep="%s" data-search="%s">
   <header class="card-head" role="button" tabindex="0" aria-expanded="false"
           onclick="togglePaper(this)" onkeydown="cardKey(event, this)">
     <div class="tags">%s</div>
@@ -286,15 +292,38 @@ def render_entry(e):
     %s
   </div>
 </article>""" % (
-        " is-deep" if deep else "", esc(e.get("subfield", "other")), "1" if deep else "0",
+        " is-deep" if deep else "", anchor(aid), esc(aid),
+        esc(e.get("subfield", "other")), "1" if deep else "0",
         esc(search_blob), "".join(badges), esc(e.get("title_en", "")), esc(e.get("title_zh", "")),
         esc(e.get("authors", "")), esc(id_label), esc(aid), esc(e.get("categories", "")), esc(e.get("submitted", "")),
         links, why, "".join(secs),
     )
 
 
+def search_index(all_entries):
+    """A compact record per paper, for finding papers that live on another page.
+
+    Titles, authors, identifier and date only -- no analysis prose. Every page
+    carries the whole thing, so it has to stay small: the full text of a year of
+    entries would be megabytes, while this is a couple of hundred bytes each.
+
+    Fields are single letters and the searchable haystack is rebuilt in the
+    browser rather than stored: spelling it out here duplicated the titles it is
+    made of and doubled the payload every page carries.
+    """
+    return [{
+        "i": e.get("arxiv_id", ""),
+        "a": anchor(e.get("arxiv_id", "")),
+        "f": e.get("subfield", "other"),
+        "d": e.get("read_date", ""),
+        "t": e.get("title_en", ""),
+        "z": e.get("title_zh", ""),
+        "u": e.get("authors", ""),
+    } for e in all_entries]
+
+
 def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=False,
-               expand_first=False):
+               expand_first=False, index_data=None, link_prefix=""):
     """Render a full page.
 
     groups: [(heading_zh, heading_en, [entry, ...]), ...] in display order. A
@@ -308,6 +337,10 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
     expand_first: open the first group's cards on load. Wanted on the index,
         where the first group is today, but not on a topic page, where it would
         expand the entire topic's full text at once.
+    index_data: search_index() over every paper, so a search run here can point
+        at matches that live on another page. Without it the index page searches
+        three papers and reports the other hundreds as "no match".
+    link_prefix: path from this page to topics/, for links into that index.
     """
     entries = [e for _, _, es in groups for e in es]
 
@@ -331,6 +364,10 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
     stale = ('<div class="stale" id="stale" role="status" data-latest="%s" hidden></div>' % esc(latest)
              if show_stale else "")
 
+    # Inline JSON, so "</script>" appearing inside a title cannot end the block.
+    payload = json.dumps(index_data or [], ensure_ascii=False, separators=(",", ":"))
+    payload = payload.replace("<", "\\u003c")
+
     out = TEMPLATE
     for k, v in {
         "subtitle_zh": subtitle_zh, "subtitle_en": subtitle_en, "nav": nav_html,
@@ -338,6 +375,10 @@ def build_page(groups, subtitle_zh, subtitle_en, nav_html, stats, show_stale=Fal
         "latest": esc(latest), "chips": chips, "stale": stale,
         "expand_first": ' data-expand-first="1"' if expand_first else "",
         "groups": "\n".join(blocks),
+        "search_index": payload, "link_prefix": json.dumps(link_prefix),
+        "subfield_labels": json.dumps(
+            {k: [v["zh"], v["en"]] for k, v in SUBFIELDS.items()},
+            ensure_ascii=False, separators=(",", ":")),
     }.items():
         out = out.replace("{{%s}}" % k, v)
     return out
@@ -460,6 +501,23 @@ TEMPLATE = """<!DOCTYPE html>
   body.lang-en .zh-only { display:none; }
   .empty { display:none; text-align:center; color:var(--ink2); padding:60px 0; }
   body.no-results .empty { display:block; }
+  /* Matches that live on another page. Every paper sits on its topic page, so
+     this is what stops a search on the index reporting "nothing" for a paper
+     the site definitely has. */
+  .elsewhere { border:1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+    border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  /* display:flex would otherwise beat the browser's [hidden] rule and leave an
+     empty dashed box on the page whenever there is nothing to report. */
+  .elsewhere[hidden] { display:none; }
+  .elsewhere h3 { margin:0; font-size:var(--fs-sm); font-weight:600; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.06em; }
+  .elsewhere ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .elsewhere a { color:var(--ink); text-decoration:none; display:flex; flex-direction:column; gap:2px; }
+  .elsewhere a:hover .ti { border-bottom-color:var(--accent); }
+  .elsewhere .ti { font-family:var(--serif); font-size:var(--fs-md); line-height:1.35;
+    border-bottom:1px solid transparent; align-self:flex-start; }
+  .elsewhere .wh { font-size:var(--fs-xs); color:var(--ink2); font-variant-numeric:tabular-nums; }
+  .elsewhere .more { font-size:var(--fs-xs); color:var(--ink2); }
   footer { margin-top:32px; padding-top:18px; border-top:1px solid var(--line);
     font-size:var(--fs-sm); color:var(--ink2); max-width:var(--measure); }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
@@ -499,6 +557,7 @@ TEMPLATE = """<!DOCTYPE html>
   <div id="list"{{expand_first}}>
 {{groups}}
   </div>
+  <div class="elsewhere" id="elsewhere" hidden></div>
   <div class="empty"><span class="zh-only">沒有符合的論文。</span><span class="en-only">No matching papers.</span></div>
 
   <footer>
@@ -561,6 +620,7 @@ TEMPLATE = """<!DOCTYPE html>
     document.body.classList.toggle('lang-en');
     // Tell assistive tech and the hyphenator which language is actually showing.
     document.documentElement.lang = document.body.classList.contains('lang-en') ? 'en' : 'zh-Hant';
+    applyFilters();   // the cross-page results are built in one language
   }
   function toggleFilter(btn) {
     var k = btn.dataset.f, on = btn.getAttribute('aria-pressed') === 'true';
@@ -573,6 +633,67 @@ TEMPLATE = """<!DOCTYPE html>
     btn.setAttribute('aria-pressed', deepOnly ? 'true' : 'false');
     applyFilters();
   }
+  // Every paper lives on its topic page, and a page only holds its own slice.
+  // Without this, searching the index -- which is one day -- reports every other
+  // paper on the site as "no match", which reads as "we do not have it".
+  var PAPER_INDEX = {{search_index}};
+  var SUBFIELD_LABELS = {{subfield_labels}};
+  var LINK_PREFIX = {{link_prefix}};
+  var ON_PAGE = {};
+  document.querySelectorAll('[data-paper-id]').forEach(function (c) { ON_PAGE[c.dataset.paperId] = 1; });
+  var ELSEWHERE_MAX = 20;
+
+  // Built here rather than shipped: storing it would repeat the titles it is
+  // made of in every record, on every page.
+  function haystack(p) {
+    if (p._h === undefined) {
+      p._h = [p.t, p.z, p.u, p.i, p.d, (SUBFIELD_LABELS[p.f] || []).join(' ')]
+        .join(' ').toLowerCase();
+    }
+    return p._h;
+  }
+
+  function renderElsewhere(q) {
+    var box = document.getElementById('elsewhere');
+    if (!box) { return 0; }
+    if (!q) { box.hidden = true; box.innerHTML = ''; return 0; }
+    var hits = PAPER_INDEX.filter(function (p) {
+      return !ON_PAGE[p.i] && haystack(p).indexOf(q) !== -1;
+    });
+    if (!hits.length) { box.hidden = true; box.innerHTML = ''; return 0; }
+    var zh = document.body.classList.contains('lang-zh');
+    var items = hits.slice(0, ELSEWHERE_MAX).map(function (p) {
+      var href = LINK_PREFIX + encodeURIComponent(p.f) + '.html#' + p.a;
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = href;
+      var t = document.createElement('span');
+      t.className = 'ti';
+      t.textContent = zh && p.z ? p.z : p.t;
+      var w = document.createElement('span');
+      w.className = 'wh';
+      w.textContent = p.d + ' · ' + p.i;
+      a.appendChild(t); a.appendChild(w); li.appendChild(a);
+      return li;
+    });
+    box.innerHTML = '';
+    var h = document.createElement('h3');
+    h.textContent = zh ? '在其他頁面找到 ' + hits.length + ' 篇'
+                       : hits.length + ' more on other pages';
+    var ol = document.createElement('ol');
+    items.forEach(function (li) { ol.appendChild(li); });
+    box.appendChild(h); box.appendChild(ol);
+    if (hits.length > ELSEWHERE_MAX) {
+      var more = document.createElement('div');
+      more.className = 'more';
+      more.textContent = zh ? '還有 ' + (hits.length - ELSEWHERE_MAX) + ' 篇未列出'
+                            : (hits.length - ELSEWHERE_MAX) + ' not listed';
+      box.appendChild(more);
+    }
+    box.hidden = false;
+    return hits.length;
+  }
+
   function applyFilters() {
     var q = document.getElementById('q').value.trim().toLowerCase(), shown = 0;
     document.querySelectorAll('.card').forEach(function (c) {
@@ -587,7 +708,10 @@ TEMPLATE = """<!DOCTYPE html>
       var any = Array.prototype.some.call(g.querySelectorAll('.card'), function (c) { return c.style.display !== 'none'; });
       g.style.display = any ? '' : 'none';
     });
-    document.body.classList.toggle('no-results', shown === 0);
+    // Only a search looks beyond this page; the chips and the deep toggle are
+    // filters over what is here.
+    var away = renderElsewhere(filters.size || deepOnly ? '' : q);
+    document.body.classList.toggle('no-results', shown === 0 && away === 0);
   }
   document.addEventListener('keydown', function (e) {
     if (e.key === '/' && document.activeElement.id !== 'q') { e.preventDefault(); document.getElementById('q').focus(); }
@@ -602,6 +726,19 @@ TEMPLATE = """<!DOCTYPE html>
       syncCard(c);
     });
   }
+
+  // Arriving from a cross-page search result: open that paper and go to it,
+  // otherwise the link lands on a collapsed card in a long list.
+  function openFromHash() {
+    if (!/^#p-[a-z0-9-]+$/.test(location.hash)) { return; }
+    var card = document.getElementById(location.hash.slice(1));
+    if (!card || !card.classList.contains('card')) { return; }
+    card.classList.add('open');
+    syncCard(card);
+    card.scrollIntoView({block: 'start'});
+  }
+  openFromHash();
+  window.addEventListener('hashchange', openFromHash);
 </script>
 </body>
 </html>"""
@@ -654,6 +791,8 @@ def main(argv=None):
                        else '<a href="%stopics/%s.html">%s</a>' % (prefix, k, label))
         return " ".join(out)
 
+    idx = search_index(all_entries)
+
     # index.html -- the latest day only
     latest = all_dates[0]
     index_html = build_page(
@@ -662,7 +801,8 @@ def main(argv=None):
         " · 以往的論文依主題整理，見上方連結",
         "Music Information Retrieval daily digest · curated for megan · motivation, intro,"
         " method, limitations, discussion · earlier papers are organised by topic, linked above",
-        topic_nav(), totals, show_stale=True, expand_first=True)
+        topic_nav(), totals, show_stale=True, expand_first=True,
+        index_data=idx, link_prefix="topics/")
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html)
 
@@ -677,29 +817,10 @@ def main(argv=None):
                 [(sf["zh"], sf["en"], es)],
                 "%s · 累積 %d 篇 · 由新到舊" % (sf["zh"], len(es)),
                 "%s · %d papers so far · newest first" % (sf["en"], len(es)),
-                topic_nav(k), stats))
+                topic_nav(k), stats, index_data=idx))
 
-    # topics index
-    rows = "".join(
-        '<li><a href="%s.html">%s / %s</a> — %d <span class="zh-only">篇</span>'
-        '<span class="en-only">papers</span></li>'
-        % (k, esc(SUBFIELDS[k]["zh"]), esc(SUBFIELDS[k]["en"]),
-           sum(1 for e in all_entries if e.get("subfield") == k))
-        for k in topics)
-    with open(os.path.join(out_dir, "topics", "index.html"), "w", encoding="utf-8") as f:
-        f.write("""<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Topics · MIR Daily Paper Digest</title>
-<style>:root{--bg:#f6f5f2;--ink:#191714;--accent:#8a5423;--line:#e4e0d8}
-@media(prefers-color-scheme:dark){:root{--bg:#131211;--ink:#ecebe7;--accent:#d9a86f;--line:#302d29}}
-body{margin:0;background:var(--bg);color:var(--ink);
-font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif}
-.wrap{max-width:640px;margin:0 auto;padding:40px 20px}
-h1{font-size:1.5rem;letter-spacing:-.015em;margin:0 0 1rem}
-a{color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-ul{padding-left:1.2em}li{margin:.4em 0;border-bottom:1px solid var(--line);padding-bottom:.4em}</style></head>
-<body><div class="wrap"><h1>主題 / Topics</h1>
-<p><a href="../index.html">← 回到最新 / back to latest</a></p><ul>%s</ul></div></body></html>""" % rows)
-
+    # No topics/index.html: the nav already lists every topic on every page, so
+    # a separate list of them was a page nothing linked to.
     print("built: index.html (%s, %d papers), %d topic page(s), %d papers total"
           % (latest, len(days[latest]), len(topics), len(all_entries)))
     return 0
