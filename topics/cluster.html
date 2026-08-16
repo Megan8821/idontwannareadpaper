@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIR Daily Paper Digest</title>
+<style>
+  /* Neutrals are warmed toward the brown accent rather than left pure grey, so
+     the greys and the accent read as one set. Both themes define every token;
+     no component reaches for a literal colour. */
+  :root { --bg:#f6f5f2; --panel:#fffefc; --ink:#191714; --ink2:#615b52; --line:#e4e0d8;
+    --accent:#8a5423; --deep:#b45309; --warn:#8a6410; --shadow:0 1px 3px rgba(60,45,25,.07);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    /* Latin paper titles only. A journal-ish serif that ships with the OS --
+       the page must stay self-contained, and a CJK webfont would be megabytes,
+       so the pairing comes from stacks rather than downloads. */
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Times New Roman",Georgia,serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --fs-xs:.75rem; --fs-sm:.8125rem; --fs-md:.9375rem; --fs-base:1rem;
+    --fs-lg:1.1875rem; --fs-xl:1.5rem;
+    --measure:68ch; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#131211; --panel:#1c1a18; --ink:#ecebe7; --ink2:#9d968b; --line:#302d29;
+      --accent:#d9a86f; --deep:#f0b429; --warn:#d2a63f; --shadow:none; }
+    /* The subfield hues are picked to sit on paper. Lifting them as a set keeps
+       them legible on a dark ground without maintaining a second palette. */
+    .tag { background:color-mix(in srgb, var(--tag,#475569) 78%, #fff); }
+    .dot { background:color-mix(in srgb, var(--tag) 78%, #fff); } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:var(--fs-base)/1.7 var(--sans); }
+  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 96px;
+    display:flex; flex-direction:column; gap:18px; }
+  header.top { display:flex; flex-direction:column; gap:6px; }
+  header.top h1 { font-size:var(--fs-xl); margin:0; letter-spacing:-.015em; text-wrap:balance; }
+  header.top .sub { color:var(--ink2); font-size:var(--fs-md); max-width:var(--measure); }
+  nav.site { font-size:var(--fs-sm); display:flex; gap:14px; flex-wrap:wrap; }
+  nav.site a { color:var(--accent); text-decoration:none;
+    border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  nav.site a:hover { border-bottom-color:var(--accent); }
+  nav.site .here { color:var(--ink2); border:0; }
+  /* Shown only when the newest entry is behind today -- the site reporting on
+     its own freshness, so a run that dies without pushing is still visible. */
+  .stale { padding:12px 16px; border-radius:10px; font-size:var(--fs-md);
+    background:color-mix(in srgb, var(--warn) 12%, var(--panel));
+    border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .stale b { color:var(--warn); }
+  .controls { position:sticky; top:0; z-index:10; background:var(--bg); padding:12px 0 14px;
+    border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:10px; }
+  input[type=search] { width:100%; padding:11px 14px; font-size:var(--fs-md); color:var(--ink);
+    font-family:var(--sans); background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chip, .toggle { font:inherit; font-size:var(--fs-sm); color:var(--ink2); cursor:pointer; background:var(--panel);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px; display:inline-flex; align-items:center; gap:6px; }
+  .chip[aria-pressed=true], .toggle[aria-pressed=true] { color:var(--ink); border-color:var(--accent);
+    box-shadow:inset 0 0 0 1px var(--accent); }
+  /* One visible focus treatment for every control, including the card headers,
+     which are keyboard-operable and previously showed nothing at all. */
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--tag); }
+  #list { display:flex; flex-direction:column; gap:34px; }
+  .group { display:flex; flex-direction:column; gap:14px; }
+  .group-head { display:flex; align-items:baseline; gap:12px; font-size:var(--fs-base); font-weight:600;
+    padding-bottom:8px; border-bottom:2px solid var(--line); margin:0; }
+  .group-head .label { font-variant-numeric:tabular-nums; }
+  .group-head .count { font-weight:400; font-size:var(--fs-sm); color:var(--ink2); font-family:var(--sans); }
+  .mono { font-family:var(--mono); }
+  .card { background:var(--panel); border:1px solid var(--line); border-left:3px solid transparent;
+    border-radius:10px; box-shadow:var(--shadow); overflow:hidden; }
+  .card.is-deep { border-left-color:var(--deep); }
+  .card-head { padding:16px 44px 16px 18px; cursor:pointer; position:relative;
+    display:flex; flex-direction:column; gap:7px; }
+  .card-head:hover { background:color-mix(in srgb, var(--panel) 92%, var(--accent)); }
+  .tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-size:var(--fs-xs); letter-spacing:.03em; text-transform:uppercase; padding:3px 8px;
+    border-radius:4px; color:#fff; background:var(--tag,#475569); }
+  .tag.deep { background:var(--deep); }
+  .tag.warn { background:var(--warn); }
+  .tag.date-tag { background:transparent; color:var(--ink2); border:1px solid var(--line);
+    text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  .titles { display:flex; flex-direction:column; gap:3px; }
+  /* The serif is the English title's alone; the Chinese title stays in the sans
+     stack, where the installed CJK face is the one that actually renders well. */
+  .card h3 { margin:0; font-size:var(--fs-lg); line-height:1.4; font-weight:600;
+    font-family:var(--serif); text-wrap:balance; max-width:var(--measure); }
+  .card h3.t-zh { font-size:var(--fs-md); font-weight:500; color:var(--ink2);
+    font-family:var(--sans); line-height:1.55; }
+  .meta { font-size:var(--fs-sm); color:var(--ink2); }
+  .meta.mono { font-variant-numeric:tabular-nums; }
+  .card-links { display:flex; gap:12px; padding:0 18px 14px; }
+  .card-links a { font-size:var(--fs-sm); color:var(--accent); text-decoration:none;
+    border-bottom:1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  .card-links a:hover { border-bottom-color:var(--accent); }
+  .chev { position:absolute; right:18px; top:20px; width:9px; height:9px; border-right:2px solid var(--ink2);
+    border-bottom:2px solid var(--ink2); transform:rotate(45deg); transition:transform .18s; }
+  .card.open .chev { transform:rotate(-135deg); }
+  .card-body { display:none; padding:0 18px 18px; border-top:1px solid var(--line); }
+  .card.open .card-body { display:flex; flex-direction:column; gap:18px; }
+  .why { font-size:var(--fs-md); color:var(--ink2); background:color-mix(in srgb, var(--panel) 88%, var(--accent));
+    border-radius:8px; padding:10px 13px; margin:16px 0 0; max-width:var(--measure); }
+  .sec { display:flex; flex-direction:column; gap:6px; }
+  .sec h4 { margin:0; font-size:var(--fs-xs); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:4px; }
+  /* The analysis is long-form reading, so it is held to a column rather than
+     spanning the full card -- 920px of 16px text is over 100 characters a line. */
+  .sec .body { max-width:var(--measure); }
+  .sec .body p { margin:.55em 0; }
+  .sec code { font-family:var(--mono); font-size:.88em;
+    background:color-mix(in srgb, var(--panel) 84%, var(--ink2)); padding:1px 5px; border-radius:4px; }
+  .body.en-only { color:var(--ink2); }
+  body.lang-zh .en-only { display:none; }
+  body.lang-en .zh-only { display:none; }
+  .empty { display:none; text-align:center; color:var(--ink2); padding:60px 0; }
+  body.no-results .empty { display:block; }
+  /* Matches that live on another page. Every paper sits on its topic page, so
+     this is what stops a search on the index reporting "nothing" for a paper
+     the site definitely has. */
+  .elsewhere { border:1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+    border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  /* display:flex would otherwise beat the browser's [hidden] rule and leave an
+     empty dashed box on the page whenever there is nothing to report. */
+  .elsewhere[hidden] { display:none; }
+  .elsewhere h3 { margin:0; font-size:var(--fs-sm); font-weight:600; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.06em; }
+  .elsewhere ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .elsewhere a { color:var(--ink); text-decoration:none; display:flex; flex-direction:column; gap:2px; }
+  .elsewhere a:hover .ti { border-bottom-color:var(--accent); }
+  .elsewhere .ti { font-family:var(--serif); font-size:var(--fs-md); line-height:1.35;
+    border-bottom:1px solid transparent; align-self:flex-start; }
+  .elsewhere .wh { font-size:var(--fs-xs); color:var(--ink2); font-variant-numeric:tabular-nums; }
+  .elsewhere .more { font-size:var(--fs-xs); color:var(--ink2); }
+  footer { margin-top:32px; padding-top:18px; border-top:1px solid var(--line);
+    font-size:var(--fs-sm); color:var(--ink2); max-width:var(--measure); }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body class="lang-zh">
+<div class="wrap">
+  <header class="top">
+    <h1>MIR Daily Paper Digest</h1>
+    <div class="sub"><span class="zh-only">音樂聚類與相似度 · 累積 1 篇 · 由新到舊</span><span class="en-only">Music Clustering & Similarity · 1 papers so far · newest first</span></div>
+  </header>
+  <nav class="site"><a href="../index.html"><span class="zh-only">← 最新</span><span class="en-only">← Latest</span></a> <a href="../topics/generative.html"><span class="zh-only">生成式音樂模型</span><span class="en-only">Generative Music Models</span></a> <a href="../topics/representation.html"><span class="zh-only">音源分離與表徵學習</span><span class="en-only">Separation &amp; Representation</span></a> <a href="../topics/transcription.html"><span class="zh-only">轉譜與音高分析</span><span class="en-only">Transcription &amp; Pitch</span></a> <a href="../topics/retrieval.html"><span class="zh-only">檢索、推薦與情緒</span><span class="en-only">Retrieval, RecSys &amp; Emotion</span></a> <span class="here"><span class="zh-only">音樂聚類與相似度</span><span class="en-only">Music Clustering &amp; Similarity</span></span> <a href="../topics/other.html"><span class="zh-only">其他 MIR 主題</span><span class="en-only">Other MIR Topics</span></a></nav>
+
+  
+
+  <div class="controls">
+    <input type="search" id="q" aria-label="搜尋論文 / Search papers"
+           placeholder="搜尋標題、作者、方法、日期、arXiv ID…  /  search title, author, method, date, arXiv ID…"
+           oninput="applyFilters()" autocomplete="off">
+    <div class="row">
+      <button class="chip" data-f="cluster" onclick="toggleFilter(this)"><span class="dot" style="--tag:#a16207"></span><span class="zh-only">音樂聚類與相似度</span><span class="en-only">Music Clustering &amp; Similarity</span></button>
+      <button class="toggle" id="deepOnly" aria-pressed="false" onclick="toggleDeep(this)">★
+        <span class="zh-only">只看深度分析</span><span class="en-only">deep dives only</span></button>
+      <button class="toggle" id="langBtn" onclick="toggleLang()">中 / EN</button>
+      <button class="toggle" onclick="setAll(true)"><span class="zh-only">全部展開</span><span class="en-only">expand all</span></button>
+      <button class="toggle" onclick="setAll(false)"><span class="zh-only">全部收合</span><span class="en-only">collapse all</span></button>
+    </div>
+  </div>
+
+  <div id="list">
+<div class="group">
+<h2 class="group-head"><span class="label mono zh-only">音樂聚類與相似度</span><span class="label mono en-only">Music Clustering &amp; Similarity</span><span class="count">1 <span class="zh-only">篇</span><span class="en-only">papers</span></span></h2>
+<article class="card" id="p-2608-10980" data-paper-id="2608.10980" data-subfield="cluster" data-deep="0" data-search="measuring cross-cultural style diffusion through era classification: us and korean popular music 透過年代分類量測跨文化風格擴散：美國與韓國流行音樂 dasol lee, minhee lee, seonguk ju, daewoong kim, harin lee, dasaem jeong 2608.10980 音樂聚類與相似度 music clustering &amp; similarity 既有的跨文化音樂比較大多依賴類型（genre）或情緒標籤，但這些標籤本身就帶著西方偏見。這篇論文換一個角度：把「年代」當成跨文化都通用、不帶文化偏見的比較軸——先用美國billboard hot 100的音訊訓練cnn年代分類器，再把它直接套用到韓國melon排行榜歌曲上，用「模型認為這首韓國歌是哪個年代的美國歌」跟「它實際上市的年代」之間的落差，量化風格擴散的時間差。作者用六種不同架構、三種隨機種子共十八次獨立訓練跑，確認「1960到80年代落後四到五年、90年代驟降到二到三年」這個模式跨架構穩定，並用「原始版跟母帶重製版」的243對錄音做對照實驗，排除「只是母帶風格造成落差」這個混淆因素。方法本身是既有cnn架構的直接應用而非新架構，因此不列為深度分析，但它把一個音樂學命題（文化擴散速度）轉成了可重複驗證的數字，是紮實的量化音樂學研究。 most cross-cultural music comparisons rely on genre or mood labels, which themselves carry western bias. this paper takes a different angle: using chronological era as a culture-agnostic comparison axis. it trains a cnn era classifier on us billboard hot 100 audio, then applies it directly to korean melon chart songs, using the gap between &quot;which us era the model thinks this korean song belongs to&quot; and its actual release era to quantify the time lag in style diffusion. the authors ran six different architectures across three random seeds — eighteen independent runs — to confirm the pattern (a 4-5 year lag in the 1960s-80s, sharply narrowing to 2-3 years in the 1990s) holds robustly across architectures, and used 243 original/remastered recording pairs as a control to rule out &quot;it&#x27;s just mastering style&quot; as a confound. the method itself applies existing cnn architectures rather than introducing a new one, so it isn&#x27;t flagged as a deep dive, but it turns a musicological claim (the speed of cultural diffusion) into a reproducible, quantified number — solid computational musicology. 2026-08-14 音樂風格如何跨文化傳播、又如何被在地文化吸收，是音樂學長期關心的問題，但過去的計算方法大多倚賴類型或情緒這類標籤體系去做跨文化比較，而這些標籤體系本身往往帶著明顯的西方中心偏見，拿去套在非西方音樂上時，分類本身就可能是錯的。作者想找一個不需要依賴任何文化特定標籤、卻能量化文化間風格擴散速度的比較軸，而「年代」正好符合這個要求：年代是客觀、跨文化通用的量尺，不需要事先定義「這是什麼類型」。具體做法是：先用美國billboard排行榜的歌曲訓練一個只認得「這首歌聽起來像哪個年代」的分類器，再把這個分類器直接套用到韓國melon排行榜歌曲上——如果分類器把一首1970年代的韓國歌判斷成「聽起來像1965年的美國歌」，這個落差本身就是一個可以量化、可以逐年代追蹤的「風格擴散延遲」指標。 how musical styles diffuse across cultures and get locally absorbed is a long-standing musicological question, but prior computational approaches mostly lean on genre or mood taxonomies for cross-cultural comparison — taxonomies that themselves often carry substantial western bias, so the classification itself may already be wrong when applied to non-western music. the authors wanted a comparison axis that needs no culture-specific labeling scheme yet still quantifies the speed of cross-cultural style diffusion, and chronological era fits that requirement: era is an objective, culture-independent yardstick that requires no prior &quot;what genre is this&quot; definition. concretely: train a classifier on us billboard-chart songs that only learns &quot;which era does this sound like,&quot; then apply that same classifier directly to korean melon-chart songs — if the classifier judges a 1970s korean song as &quot;sounding like a 1965 american song,&quot; that gap is itself a quantifiable, decade-trackable measure of style-diffusion lag. 論文的歷史脈絡是：韓國流行音樂透過長期接觸西方風格發展而成，最早的管道是1960年代駐韓美軍基地的現場演出，後來隨著媒體基礎設施擴張而擴大；신중현（shin joong-hyun）引進迷幻搖滾是關鍵人物之一，1992年出道的서태지와 아이들（seo taiji and boys）則帶動了整個產業轉型，把韓國流行音樂推向當代k-pop的樣貌。計算方法上，過去研究（如serrà等人、million song dataset相關工作）分析過音高、音色、響度等特徵跨十年的變化趨勢，也有研究追蹤過billboard內部風格聚類的變化，但這些大多停留在「描述某個市場內部的風格演變」，沒有做跨市場、跨文化的直接比較。既有的跨文化mir比較大多倚賴類型或情緒標籤體系，而這類標籤體系存在明顯的文化偏誤。這篇論文的創新在於把「跨域推論」本身當成分析工具：不是去描述韓國或美國各自的風格演變，而是用「年代/年份預測」當成一個跨文化同步程度的量測透鏡，用「時序」這個不帶文化偏見的軸取代類型或情緒標籤。 the paper&#x27;s historical framing: korean popular music developed through sustained exposure to western styles, initially via live performances at us military bases in the 1960s, later expanding alongside media infrastructure; shin joong-hyun, who introduced psychedelic rock, was a key early figure, and seo taiji and boys (debuting 1992) catalyzed an industry-wide transformation that pushed korean pop toward what became contemporary k-pop. on the computational side, prior work (e.g. serrà et al., million song dataset-related studies) examined trends in pitch, timbre, and loudness across decades, and other studies tracked stylistic clustering shifts within billboard — but these mostly describe style evolution within a single market, without direct cross-market, cross-cultural comparison. existing cross-cultural mir comparisons mostly rely on genre or mood taxonomies, which carry clear cultural bias. this paper&#x27;s innovation is treating cross-domain inference itself as the analytical tool: rather than describing korean or american style evolution separately, it uses era/year prediction as a lens for measuring cross-cultural synchronization, replacing genre or mood labels with chronological time as a culture-independent axis. **資料集**：billboard方面蒐集了1958年到2024年3月共31,092筆不重複排行榜紀錄，透過youtube取得22,002首歌的音訊，並過濾出原版錄音，同時移除68首掛名韓國創作者的曲目，確保「美國流行音樂」這個域保持乾淨、不受汙染。melon方面約2,200首有音訊的歌曲（1964到2009年），刻意把時間上限設在2009年，是為了研究「單向的風格吸收」——也就是在k-pop於2010年代全球化、韓流開始反向影響美國之前的那段時期。年代標籤採用「上榜日期」而非「發行日期」，理由是上榜日期更直接反映這首歌實際被商業流通、被聽眾聽到的時間點。切分資料時建構了藝人合作關係圖，確保訓練/驗證/測試切分不會讓同一位歌手的聲音同時出現在訓練集與測試集（避免模型學到的是「認聲音」而非「認年代」），切分比例約8:1:1，並對各年代做類別平衡的欠採樣以緩解年代間資料量不均的問題。
+
+**分層式年代預測**：模型不是單純做扁平的年份分類，而是同時在四個層級聯合預測：年代（decade）、半年代（five-year）、四分之一年代（2.5-year）、以及年份（year）。1958-1959年併入1960年代，2020-2024年併入2010年代。損失函數是所有層級的交叉熵總和，再加上一個懲罰「父子層預測互相矛盾」的階層一致性項（權重λ=1）。核心量測指標是年代落差：δ(s) = ê(s) − e_s，其中ê是模型預測的年代、e_s是這首歌實際上榜的年代。
+
+**音訊表徵與訓練**：音訊轉成單聲道、16khz，刻意捨棄立體聲資訊與8khz以上的高頻，目的是消除混音與母帶處理帶來的偽影；訓練時每個epoch隨機裁切30秒片段；用adam優化器，學習率1×10⁻⁴，批次大小64，訓練3萬次迭代，每500次迭代驗證一次，保留巨集準確率最高的checkpoint；訓練批次對各年代做欠採樣，以資料量最少的2000年代（1,585首）為基準。
+
+**模型選擇策略**：為了避免預訓練資料外洩問題（mert、jukebox等預訓練模型很可能已經看過韓國音樂），六種cnn架構全部從頭訓練，包括fcn、shortchunkcnn、shortchunkcnn_res、musicnn、crnn，以及一個三層卷積的簡單基線，參數量從86k到837k不等，每種架構跑三個隨機種子，共十八次獨立訓練跑。
+
+**域內billboard表現**：年代層級的巨集準確率在各架構間落在67.0%到71.2%之間，遠高於16.7%的隨機猜測基準；年份層級的混淆矩陣顯示預測集中在對角線附近，說明模型確實學到了有意義的時序梯度；2010年代的準確率較弱，可能反映近期音樂本身風格更多元。
+
+**跨域推論（billboard→melon，主要發現）**：各年代的年代落差中位數（table 3）：1960年代−4.7年（標準差±0.6）、1970年代−4.5年（±0.7）、1980年代−4.1年（±0.8）、1990年代驟降到−2.4年（±0.8）、2000年代−2.7年（±1.4）。重要的對照組是：billboard訓練出的模型在billboard自己的保留測試集上幾乎沒有偏移（每個年代域內落差中位數都在±0.2年以內），確認前述的落差反映的是跨域的真實文化差距，而不是模型本身系統性偏誤。2000年代的預測呈現雙峰：舞曲/嘻哈類藝人（bigbang、2ne1、epik high）被判斷得很準（接近實際年代），而抒情/r&amp;b歌手（sg wannabe、brown eyes）仍被判斷得比實際晚了好幾年。
+
+**跨架構一致性**：六種架構全部把1970年代音樂判斷得偏早（落差3.7到6.5年），其中四種架構顯示落差往2000年代收斂到4到6年，另外兩種（簡單基線幾乎不動、musicnn反而略微加大落差）則有分歧，顯示整體趨勢穩健，但確實存在架構相依的細節差異。
+
+**反向推論（melon→billboard）**：用melon訓練出的模型去判斷billboard歌曲，呈現互補的模式：美國歌曲被判斷得比實際「更晚」，1960年代落差約10年，到2000年代收斂到接近零。但melon模型本身巨集準確率只有52.4%（相對billboard模型的76.3%），1960年代準確率更只有9.5%（訓練樣本只有34首），作者把這個反向結果解讀為「印證方向、但不強調數值精確度」。 **datasets**: on the billboard side, the team collected 31,092 unique chart entries spanning 1958 to march 2024, retrieving audio for 22,002 tracks via youtube with filtering for original recordings, and removed 68 korean-credited tracks to keep the &quot;us pop&quot; domain uncontaminated. melon contributes roughly 2,200 tracks with audio (1964-2009), deliberately capped at 2009 to study unidirectional style adoption — the period before k-pop&#x27;s 2010s globalization began influencing the us in the other direction. era labels use chart-entry date rather than release date, since chart-entry date more directly reflects when a song actually circulated commercially and reached listeners. splits were built using artist-collaboration graphs so the same singer&#x27;s voice never appears in both train and test (preventing the model from learning &quot;recognize the voice&quot; instead of &quot;recognize the era&quot;), at roughly an 8:1:1 ratio, with class-balanced undersampling across decades to offset uneven data volume.
+
+**hierarchical era prediction**: rather than flat year classification, the model jointly predicts four levels simultaneously — decade, half-decade, quarter-decade, and year. 1958-1959 is grouped with the 1960s, 2020-2024 with the 2010s. the loss is the sum of cross-entropy across all levels plus a hierarchical-consistency penalty (λ=1) that punishes parent-child prediction contradictions. the core metric is the era offset: δ(s) = ê(s) − e_s, where ê is the predicted era and e_s the song&#x27;s actual chart-entry era.
+
+**audio representation and training**: audio is converted to mono, 16khz, deliberately discarding stereo information and frequencies above 8khz to eliminate mixing/mastering artifacts; random 30-second crops are taken per epoch during training; adam optimizer at learning rate 1×10⁻⁴, batch size 64, 30,000 iterations, validated every 500 iterations, keeping the checkpoint with highest macro accuracy; training batches are undersampled to match the smallest decade class (2000s: 1,585 tracks).
+
+**model selection strategy**: to avoid pretraining data leakage (models like mert or jukebox likely already saw korean music), six cnn architectures were trained entirely from scratch — fcn, shortchunkcnn, shortchunkcnn_res, musicnn, crnn, and a simple 3-conv-layer baseline — ranging from 86k to 837k parameters, each run across three random seeds for 18 total independent runs.
+
+**in-domain billboard performance**: decade-level macro accuracy ranges 67.0%-71.2% across architectures, well above the 16.7% chance baseline; the year-level confusion matrix clusters near the diagonal, confirming the model learned a meaningful temporal gradient; accuracy weakens in the 2010s, possibly reflecting greater recent stylistic diversity.
+
+**cross-domain inference (billboard→melon, the main finding)**: median era offsets by decade (table 3): 1960s −4.7 years (sd ±0.6), 1970s −4.5 years (±0.7), 1980s −4.1 years (±0.8), 1990s sharply narrowing to −2.4 years (±0.8), 2000s −2.7 years (±1.4). a crucial control: billboard-trained models show almost no offset on billboard&#x27;s own held-out test set (in-domain median offset within ±0.2 years per decade), confirming the offset above reflects a genuine cross-domain cultural gap, not systematic model bias. the 2000s predictions are bimodal: dance/hip-hop acts (bigbang, 2ne1, epik high) are dated accurately near their real era, while ballad/r&amp;b singers (sg wannabe, brown eyes) are still back-dated by several years.
+
+**cross-architecture consistency**: all six architectures back-date 1970s music (offset 3.7-6.5 years), and four of the six show the offset narrowing to 4-6 years by the 2000s, while two dissent (the simple baseline barely moves; musicnn&#x27;s offset widens slightly) — indicating the overall pattern is robust while some architecture-dependent detail exists.
+
+**reverse inference (melon→billboard)**: a melon-trained model judging billboard songs shows a complementary pattern — us songs are dated as &quot;later&quot; than they are, by about 10 years in the 1960s, narrowing to near zero by the 2000s. but the melon model&#x27;s own macro accuracy is only 52.4% (versus billboard&#x27;s 76.3%), with 1960s accuracy at just 9.5% (only 34 training tracks) — the authors read this reverse result as &quot;corroborating direction rather than precise magnitude.&quot; 作者明確列出幾項限制。第一，「風格」跟「製作」混雜：梅爾頻譜圖同時捕捉磁帶噪訊、壓縮、母帶處理跟和聲、編曲等音樂內容，作者坦承「量到的落差有一部分很可能是製作滯後而非風格滯後」，也就是說，論文量到的「4到5年落差」不能簡單地解讀成「純粹的音樂風格擴散延遲」，錄音與混音技術的擴散速度也摻在裡面。第二，顆粒度問題：30秒的裁切片段沒辦法捕捉整首歌的段落結構；藝人感知的切分方式也沒辦法控制製作人、錄音工程師、作曲人這些幕後角色的重疊。第三，單曲精確度不足：同一首歌不同裁切片段預測結果的變異，billboard的標準差是3.3年、melon是6.0年，所以「年代中位數」是靠平均把這些雜訊蓋掉的，對單一首歌做精確定年並不可靠。第四，音訊來源：youtube比對到的音訊「不一定是原始錄音版本」。第五，排行榜資料反映的是「流通」時間點而非「製作」時間點，兩個語料庫本身跨越的年份範圍也不對稱。不過作者也做了兩個對照排除混淆因素：243對原版/母帶重製版的比較顯示，重製後的落差有的變早有的變晚，分布平均，說明母帶風格本身不是驅動整體結果的主因；只用比對品質最好的80%音訊重跑，各年代中位數的變化都不超過0.5年，說明音訊比對誤差也不是主要驅動因素。 the authors list several explicit limitations. first, style and production are conflated: mel-spectrograms capture tape noise, compression, and mastering equally alongside harmony and arrangement, and the authors acknowledge that &quot;part of the measured offset is likely production lag rather than stylistic lag&quot; — meaning the paper&#x27;s headline 4-5 year gap can&#x27;t simply be read as pure musical-style diffusion delay; the diffusion speed of recording and mixing technology is mixed in too. second, granularity issues: 30-second crops can&#x27;t capture a song&#x27;s overall formal structure, and artist-aware splitting doesn&#x27;t control for overlapping producers, engineers, or songwriters behind the scenes. third, individual-song precision is limited: prediction variance across different crops of the same song has a standard deviation of 3.3 years (billboard) and 6.0 years (melon), so decade medians average out this noise but individual songs can&#x27;t be dated precisely. fourth, audio source: youtube-matched audio &quot;is not always the original recording.&quot; fifth, chart data reflects circulation timing rather than production timing, and the two corpora span asymmetric year ranges. that said, the authors ran two controls to rule out confounds: 243 original/remastered pairs show changes split roughly evenly between earlier and later, indicating mastering style alone isn&#x27;t driving the overall result; and restricting to the best-matched 80% of audio moves no decade median by more than 0.5 years, indicating audio-matching error isn&#x27;t a major driver either. 作者把「年代落差」重新框架成「跨文化音樂流動之演變中的結構性條件的痕跡」，而不是單純的模仿程度指標。1960到80年代之間穩定的四到五年落差，對應到當時有限的傳播管道（駐韓美軍基地演出、afkn電台）——這段時期跨藝人跨曲風都呈現一致的4到6年延遲（例：최희준choi hee-jun−6.1年、산울림sanullim−5.2年），顯示這是基礎設施驅動的系統性延遲，而非個別藝人的問題。1990年代是關鍵轉折點：落差驟降到2到3年，對應到서태지와 아이들（seo taiji and boys，1992年出道）帶來的產業重組——這個組合本身在整體上仍被判斷為落後2.4年，但個別測量下卻呈現「領先於上榜日期」的罕見模式（平均+2.8年，18次跑裡有15次為正值），而且他們的落差分布橫跨15年之廣（相對鄰近藝人只有6到7年），反映其音樂實驗跨度極廣。更重要的是，서태지와 아이들打破了廣播電視台的壟斷，讓sm娛樂、yg娛樂等經紀公司得以製作面向全球的音樂人才，像bigbang（yg，2007-09年）、少女時代（sm，2007-09年）在論文的量測裡都呈現接近零的落差。整體而言，這篇論文的價值在於把一個原本只能靠質性歷史敘述去講的命題——「韓國流行音樂如何、以多快的速度吸收西方風格」——轉成一組可重複驗證的數字，並透過243對母帶重製版對照與音訊比對品質篩選，把「這只是錄音技術差異」的疑慮排除掉。它也提出了具體的未來方向：把同樣的框架套用到其他國家的排行榜配對上、找出到底是哪些聲學線索驅動了這個落差、以及用年代推論去找出單一語料庫裡「時代錯置」的藝人（例如披頭四the beatles在18次跑裡有15次被判斷得比同代人晚了大約2年，反映他們超前時代的錄音室製作手法）。 the authors reframe the era offset not as a simple imitation metric but as &quot;a trace of the evolving structural conditions of cross-cultural music flows.&quot; the stable 4-5 year lag from the 1960s through the 1980s corresponds to the limited distribution channels of the time (us military base performances, afkn radio) — this period shows a consistent 4-6 year delay across artists and genres alike (e.g. choi hee-jun −6.1 years, sanullim −5.2 years), indicating an infrastructure-driven systemic delay rather than an artist-specific one. the 1990s mark the key inflection point: the gap sharply narrows to 2-3 years, corresponding to the industry restructuring triggered by seo taiji and boys (debuting 1992) — while the group as a whole is still measured as 2.4 years behind at the decade level, individual measurements show a rare pattern of being ahead of their chart date (mean +2.8 years, positive in 15 of 18 runs), with an unusually wide 15-year offset spread (versus 6-7 years for adjacent artists) reflecting the breadth of their sonic experimentation. more importantly, seo taiji and boys broke the broadcast networks&#x27; monopoly, enabling talent agencies like sm entertainment and yg entertainment to produce globally oriented acts — bigbang (yg, 2007-09) and girls&#x27; generation (sm, 2007-09) both register near-zero offsets in the paper&#x27;s measurements. overall, this paper&#x27;s value lies in converting a claim previously arguable only through qualitative historical narrative — how, and how fast, did korean pop absorb western style — into a set of reproducible numbers, ruling out &quot;this is just recording-technology difference&quot; via the 243 remastered-pair control and audio-match-quality filtering. it also proposes concrete future directions: applying the same framework to other national chart pairs, identifying which specific acoustic cues drive the offset, and using era inference to surface anachronistic artists within a single corpus (e.g. the beatles were dated roughly 2 years later than their contemporaries in 15 of 18 runs, reflecting their studio production being ahead of its time).">
+  <header class="card-head" role="button" tabindex="0" aria-expanded="false"
+          onclick="togglePaper(this)" onkeydown="cardKey(event, this)">
+    <div class="tags"><span class="tag" style="--tag:#a16207"><span class="zh-only">音樂聚類與相似度</span><span class="en-only">Music Clustering &amp; Similarity</span></span><span class="tag date-tag mono">2026-08-14</span></div>
+    <div class="titles">
+      <h3 class="t-en">Measuring Cross-Cultural Style Diffusion Through Era Classification: US and Korean Popular Music</h3>
+      <h3 class="t-zh zh-only">透過年代分類量測跨文化風格擴散：美國與韓國流行音樂</h3>
+    </div>
+    <div class="meta">Dasol Lee, Minhee Lee, Seonguk Ju, Daewoong Kim, Harin Lee, Dasaem Jeong</div>
+    <div class="meta mono">arXiv:2608.10980 &middot; cs.SD &middot; <span class="zh-only">投稿</span><span class="en-only">submitted</span> 2026-08-11</div>
+    <span class="chev" aria-hidden="true"></span>
+  </header>
+  <div class="card-links">
+    <a href="https://arxiv.org/abs/2608.10980" target="_blank" rel="noopener">abs</a><a href="https://arxiv.org/pdf/2608.10980" target="_blank" rel="noopener">pdf</a><a href="https://arxiv.org/html/2608.10980" target="_blank" rel="noopener">html</a><a href="https://www.semanticscholar.org/search?q=2608.10980" target="_blank" rel="noopener">cited by</a>
+  </div>
+  <div class="card-body">
+    <div class="why"><span class="zh-only"><b>為什麼挑這篇：</b>既有的跨文化音樂比較大多依賴類型（genre）或情緒標籤，但這些標籤本身就帶著西方偏見。這篇論文換一個角度：把「年代」當成跨文化都通用、不帶文化偏見的比較軸——先用美國Billboard Hot 100的音訊訓練CNN年代分類器，再把它直接套用到韓國Melon排行榜歌曲上，用「模型認為這首韓國歌是哪個年代的美國歌」跟「它實際上市的年代」之間的落差，量化風格擴散的時間差。作者用六種不同架構、三種隨機種子共十八次獨立訓練跑，確認「1960到80年代落後四到五年、90年代驟降到二到三年」這個模式跨架構穩定，並用「原始版跟母帶重製版」的243對錄音做對照實驗，排除「只是母帶風格造成落差」這個混淆因素。方法本身是既有CNN架構的直接應用而非新架構，因此不列為深度分析，但它把一個音樂學命題（文化擴散速度）轉成了可重複驗證的數字，是紮實的量化音樂學研究。</span><span class="en-only"><b>Why this one:</b> Most cross-cultural music comparisons rely on genre or mood labels, which themselves carry Western bias. This paper takes a different angle: using chronological era as a culture-agnostic comparison axis. It trains a CNN era classifier on US Billboard Hot 100 audio, then applies it directly to Korean Melon chart songs, using the gap between &quot;which US era the model thinks this Korean song belongs to&quot; and its actual release era to quantify the time lag in style diffusion. The authors ran six different architectures across three random seeds — eighteen independent runs — to confirm the pattern (a 4-5 year lag in the 1960s-80s, sharply narrowing to 2-3 years in the 1990s) holds robustly across architectures, and used 243 original/remastered recording pairs as a control to rule out &quot;it&#x27;s just mastering style&quot; as a confound. The method itself applies existing CNN architectures rather than introducing a new one, so it isn&#x27;t flagged as a deep dive, but it turns a musicological claim (the speed of cultural diffusion) into a reproducible, quantified number — solid computational musicology.</span></div>
+    <section class="sec"><h4><span class="zh-only">動機</span><span class="en-only">Motivation</span></h4><div class="body zh-only"><p>音樂風格如何跨文化傳播、又如何被在地文化吸收，是音樂學長期關心的問題，但過去的計算方法大多倚賴類型或情緒這類標籤體系去做跨文化比較，而這些標籤體系本身往往帶著明顯的西方中心偏見，拿去套在非西方音樂上時，分類本身就可能是錯的。作者想找一個不需要依賴任何文化特定標籤、卻能量化文化間風格擴散速度的比較軸，而「年代」正好符合這個要求：年代是客觀、跨文化通用的量尺，不需要事先定義「這是什麼類型」。具體做法是：先用美國Billboard排行榜的歌曲訓練一個只認得「這首歌聽起來像哪個年代」的分類器，再把這個分類器直接套用到韓國Melon排行榜歌曲上——如果分類器把一首1970年代的韓國歌判斷成「聽起來像1965年的美國歌」，這個落差本身就是一個可以量化、可以逐年代追蹤的「風格擴散延遲」指標。</p></div><div class="body en-only"><p>How musical styles diffuse across cultures and get locally absorbed is a long-standing musicological question, but prior computational approaches mostly lean on genre or mood taxonomies for cross-cultural comparison — taxonomies that themselves often carry substantial Western bias, so the classification itself may already be wrong when applied to non-Western music. The authors wanted a comparison axis that needs no culture-specific labeling scheme yet still quantifies the speed of cross-cultural style diffusion, and chronological era fits that requirement: era is an objective, culture-independent yardstick that requires no prior &quot;what genre is this&quot; definition. Concretely: train a classifier on US Billboard-chart songs that only learns &quot;which era does this sound like,&quot; then apply that same classifier directly to Korean Melon-chart songs — if the classifier judges a 1970s Korean song as &quot;sounding like a 1965 American song,&quot; that gap is itself a quantifiable, decade-trackable measure of style-diffusion lag.</p></div></section><section class="sec"><h4><span class="zh-only">背景與相關研究</span><span class="en-only">Introduction & Prior Work</span></h4><div class="body zh-only"><p>論文的歷史脈絡是：韓國流行音樂透過長期接觸西方風格發展而成，最早的管道是1960年代駐韓美軍基地的現場演出，後來隨著媒體基礎設施擴張而擴大；신중현（Shin Joong-hyun）引進迷幻搖滾是關鍵人物之一，1992年出道的서태지와 아이들（Seo Taiji and Boys）則帶動了整個產業轉型，把韓國流行音樂推向當代K-pop的樣貌。計算方法上，過去研究（如Serrà等人、Million Song Dataset相關工作）分析過音高、音色、響度等特徵跨十年的變化趨勢，也有研究追蹤過Billboard內部風格聚類的變化，但這些大多停留在「描述某個市場內部的風格演變」，沒有做跨市場、跨文化的直接比較。既有的跨文化MIR比較大多倚賴類型或情緒標籤體系，而這類標籤體系存在明顯的文化偏誤。這篇論文的創新在於把「跨域推論」本身當成分析工具：不是去描述韓國或美國各自的風格演變，而是用「年代/年份預測」當成一個跨文化同步程度的量測透鏡，用「時序」這個不帶文化偏見的軸取代類型或情緒標籤。</p></div><div class="body en-only"><p>The paper&#x27;s historical framing: Korean popular music developed through sustained exposure to Western styles, initially via live performances at US military bases in the 1960s, later expanding alongside media infrastructure; Shin Joong-hyun, who introduced psychedelic rock, was a key early figure, and Seo Taiji and Boys (debuting 1992) catalyzed an industry-wide transformation that pushed Korean pop toward what became contemporary K-pop. On the computational side, prior work (e.g. Serrà et al., Million Song Dataset-related studies) examined trends in pitch, timbre, and loudness across decades, and other studies tracked stylistic clustering shifts within Billboard — but these mostly describe style evolution within a single market, without direct cross-market, cross-cultural comparison. Existing cross-cultural MIR comparisons mostly rely on genre or mood taxonomies, which carry clear cultural bias. This paper&#x27;s innovation is treating cross-domain inference itself as the analytical tool: rather than describing Korean or American style evolution separately, it uses era/year prediction as a lens for measuring cross-cultural synchronization, replacing genre or mood labels with chronological time as a culture-independent axis.</p></div></section><section class="sec"><h4><span class="zh-only">方法</span><span class="en-only">Method</span></h4><div class="body zh-only"><p><strong>資料集</strong>：Billboard方面蒐集了1958年到2024年3月共31,092筆不重複排行榜紀錄，透過YouTube取得22,002首歌的音訊，並過濾出原版錄音，同時移除68首掛名韓國創作者的曲目，確保「美國流行音樂」這個域保持乾淨、不受汙染。Melon方面約2,200首有音訊的歌曲（1964到2009年），刻意把時間上限設在2009年，是為了研究「單向的風格吸收」——也就是在K-pop於2010年代全球化、韓流開始反向影響美國之前的那段時期。年代標籤採用「上榜日期」而非「發行日期」，理由是上榜日期更直接反映這首歌實際被商業流通、被聽眾聽到的時間點。切分資料時建構了藝人合作關係圖，確保訓練/驗證/測試切分不會讓同一位歌手的聲音同時出現在訓練集與測試集（避免模型學到的是「認聲音」而非「認年代」），切分比例約8:1:1，並對各年代做類別平衡的欠採樣以緩解年代間資料量不均的問題。</p><p><strong>分層式年代預測</strong>：模型不是單純做扁平的年份分類，而是同時在四個層級聯合預測：年代（decade）、半年代（five-year）、四分之一年代（2.5-year）、以及年份（year）。1958-1959年併入1960年代，2020-2024年併入2010年代。損失函數是所有層級的交叉熵總和，再加上一個懲罰「父子層預測互相矛盾」的階層一致性項（權重λ=1）。核心量測指標是年代落差：Δ(s) = ê(s) − e_s，其中ê是模型預測的年代、e_s是這首歌實際上榜的年代。</p><p><strong>音訊表徵與訓練</strong>：音訊轉成單聲道、16kHz，刻意捨棄立體聲資訊與8kHz以上的高頻，目的是消除混音與母帶處理帶來的偽影；訓練時每個epoch隨機裁切30秒片段；用Adam優化器，學習率1×10⁻⁴，批次大小64，訓練3萬次迭代，每500次迭代驗證一次，保留巨集準確率最高的checkpoint；訓練批次對各年代做欠採樣，以資料量最少的2000年代（1,585首）為基準。</p><p><strong>模型選擇策略</strong>：為了避免預訓練資料外洩問題（MERT、Jukebox等預訓練模型很可能已經看過韓國音樂），六種CNN架構全部從頭訓練，包括FCN、ShortChunkCNN、ShortChunkCNN_Res、musicnn、CRNN，以及一個三層卷積的簡單基線，參數量從86k到837k不等，每種架構跑三個隨機種子，共十八次獨立訓練跑。</p><p><strong>域內Billboard表現</strong>：年代層級的巨集準確率在各架構間落在67.0%到71.2%之間，遠高於16.7%的隨機猜測基準；年份層級的混淆矩陣顯示預測集中在對角線附近，說明模型確實學到了有意義的時序梯度；2010年代的準確率較弱，可能反映近期音樂本身風格更多元。</p><p><strong>跨域推論（Billboard→Melon，主要發現）</strong>：各年代的年代落差中位數（Table 3）：1960年代−4.7年（標準差±0.6）、1970年代−4.5年（±0.7）、1980年代−4.1年（±0.8）、1990年代驟降到−2.4年（±0.8）、2000年代−2.7年（±1.4）。重要的對照組是：Billboard訓練出的模型在Billboard自己的保留測試集上幾乎沒有偏移（每個年代域內落差中位數都在±0.2年以內），確認前述的落差反映的是跨域的真實文化差距，而不是模型本身系統性偏誤。2000年代的預測呈現雙峰：舞曲/嘻哈類藝人（BigBang、2NE1、Epik High）被判斷得很準（接近實際年代），而抒情/R&amp;B歌手（SG Wannabe、Brown Eyes）仍被判斷得比實際晚了好幾年。</p><p><strong>跨架構一致性</strong>：六種架構全部把1970年代音樂判斷得偏早（落差3.7到6.5年），其中四種架構顯示落差往2000年代收斂到4到6年，另外兩種（簡單基線幾乎不動、musicnn反而略微加大落差）則有分歧，顯示整體趨勢穩健，但確實存在架構相依的細節差異。</p><p><strong>反向推論（Melon→Billboard）</strong>：用Melon訓練出的模型去判斷Billboard歌曲，呈現互補的模式：美國歌曲被判斷得比實際「更晚」，1960年代落差約10年，到2000年代收斂到接近零。但Melon模型本身巨集準確率只有52.4%（相對Billboard模型的76.3%），1960年代準確率更只有9.5%（訓練樣本只有34首），作者把這個反向結果解讀為「印證方向、但不強調數值精確度」。</p></div><div class="body en-only"><p><strong>Datasets</strong>: on the Billboard side, the team collected 31,092 unique chart entries spanning 1958 to March 2024, retrieving audio for 22,002 tracks via YouTube with filtering for original recordings, and removed 68 Korean-credited tracks to keep the &quot;US pop&quot; domain uncontaminated. Melon contributes roughly 2,200 tracks with audio (1964-2009), deliberately capped at 2009 to study unidirectional style adoption — the period before K-pop&#x27;s 2010s globalization began influencing the US in the other direction. Era labels use chart-entry date rather than release date, since chart-entry date more directly reflects when a song actually circulated commercially and reached listeners. Splits were built using artist-collaboration graphs so the same singer&#x27;s voice never appears in both train and test (preventing the model from learning &quot;recognize the voice&quot; instead of &quot;recognize the era&quot;), at roughly an 8:1:1 ratio, with class-balanced undersampling across decades to offset uneven data volume.</p><p><strong>Hierarchical era prediction</strong>: rather than flat year classification, the model jointly predicts four levels simultaneously — decade, half-decade, quarter-decade, and year. 1958-1959 is grouped with the 1960s, 2020-2024 with the 2010s. The loss is the sum of cross-entropy across all levels plus a hierarchical-consistency penalty (λ=1) that punishes parent-child prediction contradictions. The core metric is the era offset: Δ(s) = ê(s) − e_s, where ê is the predicted era and e_s the song&#x27;s actual chart-entry era.</p><p><strong>Audio representation and training</strong>: audio is converted to mono, 16kHz, deliberately discarding stereo information and frequencies above 8kHz to eliminate mixing/mastering artifacts; random 30-second crops are taken per epoch during training; Adam optimizer at learning rate 1×10⁻⁴, batch size 64, 30,000 iterations, validated every 500 iterations, keeping the checkpoint with highest macro accuracy; training batches are undersampled to match the smallest decade class (2000s: 1,585 tracks).</p><p><strong>Model selection strategy</strong>: to avoid pretraining data leakage (models like MERT or Jukebox likely already saw Korean music), six CNN architectures were trained entirely from scratch — FCN, ShortChunkCNN, ShortChunkCNN_Res, musicnn, CRNN, and a simple 3-conv-layer baseline — ranging from 86k to 837k parameters, each run across three random seeds for 18 total independent runs.</p><p><strong>In-domain Billboard performance</strong>: decade-level macro accuracy ranges 67.0%-71.2% across architectures, well above the 16.7% chance baseline; the year-level confusion matrix clusters near the diagonal, confirming the model learned a meaningful temporal gradient; accuracy weakens in the 2010s, possibly reflecting greater recent stylistic diversity.</p><p><strong>Cross-domain inference (Billboard→Melon, the main finding)</strong>: median era offsets by decade (Table 3): 1960s −4.7 years (SD ±0.6), 1970s −4.5 years (±0.7), 1980s −4.1 years (±0.8), 1990s sharply narrowing to −2.4 years (±0.8), 2000s −2.7 years (±1.4). A crucial control: Billboard-trained models show almost no offset on Billboard&#x27;s own held-out test set (in-domain median offset within ±0.2 years per decade), confirming the offset above reflects a genuine cross-domain cultural gap, not systematic model bias. The 2000s predictions are bimodal: dance/hip-hop acts (BigBang, 2NE1, Epik High) are dated accurately near their real era, while ballad/R&amp;B singers (SG Wannabe, Brown Eyes) are still back-dated by several years.</p><p><strong>Cross-architecture consistency</strong>: all six architectures back-date 1970s music (offset 3.7-6.5 years), and four of the six show the offset narrowing to 4-6 years by the 2000s, while two dissent (the simple baseline barely moves; musicnn&#x27;s offset widens slightly) — indicating the overall pattern is robust while some architecture-dependent detail exists.</p><p><strong>Reverse inference (Melon→Billboard)</strong>: a Melon-trained model judging Billboard songs shows a complementary pattern — US songs are dated as &quot;later&quot; than they are, by about 10 years in the 1960s, narrowing to near zero by the 2000s. But the Melon model&#x27;s own macro accuracy is only 52.4% (versus Billboard&#x27;s 76.3%), with 1960s accuracy at just 9.5% (only 34 training tracks) — the authors read this reverse result as &quot;corroborating direction rather than precise magnitude.&quot;</p></div></section><section class="sec"><h4><span class="zh-only">限制</span><span class="en-only">Limitations</span></h4><div class="body zh-only"><p>作者明確列出幾項限制。第一，「風格」跟「製作」混雜：梅爾頻譜圖同時捕捉磁帶噪訊、壓縮、母帶處理跟和聲、編曲等音樂內容，作者坦承「量到的落差有一部分很可能是製作滯後而非風格滯後」，也就是說，論文量到的「4到5年落差」不能簡單地解讀成「純粹的音樂風格擴散延遲」，錄音與混音技術的擴散速度也摻在裡面。第二，顆粒度問題：30秒的裁切片段沒辦法捕捉整首歌的段落結構；藝人感知的切分方式也沒辦法控制製作人、錄音工程師、作曲人這些幕後角色的重疊。第三，單曲精確度不足：同一首歌不同裁切片段預測結果的變異，Billboard的標準差是3.3年、Melon是6.0年，所以「年代中位數」是靠平均把這些雜訊蓋掉的，對單一首歌做精確定年並不可靠。第四，音訊來源：YouTube比對到的音訊「不一定是原始錄音版本」。第五，排行榜資料反映的是「流通」時間點而非「製作」時間點，兩個語料庫本身跨越的年份範圍也不對稱。不過作者也做了兩個對照排除混淆因素：243對原版/母帶重製版的比較顯示，重製後的落差有的變早有的變晚，分布平均，說明母帶風格本身不是驅動整體結果的主因；只用比對品質最好的80%音訊重跑，各年代中位數的變化都不超過0.5年，說明音訊比對誤差也不是主要驅動因素。</p></div><div class="body en-only"><p>The authors list several explicit limitations. First, style and production are conflated: mel-spectrograms capture tape noise, compression, and mastering equally alongside harmony and arrangement, and the authors acknowledge that &quot;part of the measured offset is likely production lag rather than stylistic lag&quot; — meaning the paper&#x27;s headline 4-5 year gap can&#x27;t simply be read as pure musical-style diffusion delay; the diffusion speed of recording and mixing technology is mixed in too. Second, granularity issues: 30-second crops can&#x27;t capture a song&#x27;s overall formal structure, and artist-aware splitting doesn&#x27;t control for overlapping producers, engineers, or songwriters behind the scenes. Third, individual-song precision is limited: prediction variance across different crops of the same song has a standard deviation of 3.3 years (Billboard) and 6.0 years (Melon), so decade medians average out this noise but individual songs can&#x27;t be dated precisely. Fourth, audio source: YouTube-matched audio &quot;is not always the original recording.&quot; Fifth, chart data reflects circulation timing rather than production timing, and the two corpora span asymmetric year ranges. That said, the authors ran two controls to rule out confounds: 243 original/remastered pairs show changes split roughly evenly between earlier and later, indicating mastering style alone isn&#x27;t driving the overall result; and restricting to the best-matched 80% of audio moves no decade median by more than 0.5 years, indicating audio-matching error isn&#x27;t a major driver either.</p></div></section><section class="sec"><h4><span class="zh-only">討論</span><span class="en-only">Discussion</span></h4><div class="body zh-only"><p>作者把「年代落差」重新框架成「跨文化音樂流動之演變中的結構性條件的痕跡」，而不是單純的模仿程度指標。1960到80年代之間穩定的四到五年落差，對應到當時有限的傳播管道（駐韓美軍基地演出、AFKN電台）——這段時期跨藝人跨曲風都呈現一致的4到6年延遲（例：최희준Choi Hee-jun−6.1年、산울림Sanullim−5.2年），顯示這是基礎設施驅動的系統性延遲，而非個別藝人的問題。1990年代是關鍵轉折點：落差驟降到2到3年，對應到서태지와 아이들（Seo Taiji and Boys，1992年出道）帶來的產業重組——這個組合本身在整體上仍被判斷為落後2.4年，但個別測量下卻呈現「領先於上榜日期」的罕見模式（平均+2.8年，18次跑裡有15次為正值），而且他們的落差分布橫跨15年之廣（相對鄰近藝人只有6到7年），反映其音樂實驗跨度極廣。更重要的是，서태지와 아이들打破了廣播電視台的壟斷，讓SM娛樂、YG娛樂等經紀公司得以製作面向全球的音樂人才，像BigBang（YG，2007-09年）、少女時代（SM，2007-09年）在論文的量測裡都呈現接近零的落差。整體而言，這篇論文的價值在於把一個原本只能靠質性歷史敘述去講的命題——「韓國流行音樂如何、以多快的速度吸收西方風格」——轉成一組可重複驗證的數字，並透過243對母帶重製版對照與音訊比對品質篩選，把「這只是錄音技術差異」的疑慮排除掉。它也提出了具體的未來方向：把同樣的框架套用到其他國家的排行榜配對上、找出到底是哪些聲學線索驅動了這個落差、以及用年代推論去找出單一語料庫裡「時代錯置」的藝人（例如披頭四The Beatles在18次跑裡有15次被判斷得比同代人晚了大約2年，反映他們超前時代的錄音室製作手法）。</p></div><div class="body en-only"><p>The authors reframe the era offset not as a simple imitation metric but as &quot;a trace of the evolving structural conditions of cross-cultural music flows.&quot; The stable 4-5 year lag from the 1960s through the 1980s corresponds to the limited distribution channels of the time (US military base performances, AFKN radio) — this period shows a consistent 4-6 year delay across artists and genres alike (e.g. Choi Hee-jun −6.1 years, Sanullim −5.2 years), indicating an infrastructure-driven systemic delay rather than an artist-specific one. The 1990s mark the key inflection point: the gap sharply narrows to 2-3 years, corresponding to the industry restructuring triggered by Seo Taiji and Boys (debuting 1992) — while the group as a whole is still measured as 2.4 years behind at the decade level, individual measurements show a rare pattern of being ahead of their chart date (mean +2.8 years, positive in 15 of 18 runs), with an unusually wide 15-year offset spread (versus 6-7 years for adjacent artists) reflecting the breadth of their sonic experimentation. More importantly, Seo Taiji and Boys broke the broadcast networks&#x27; monopoly, enabling talent agencies like SM Entertainment and YG Entertainment to produce globally oriented acts — BigBang (YG, 2007-09) and Girls&#x27; Generation (SM, 2007-09) both register near-zero offsets in the paper&#x27;s measurements. Overall, this paper&#x27;s value lies in converting a claim previously arguable only through qualitative historical narrative — how, and how fast, did Korean pop absorb Western style — into a set of reproducible numbers, ruling out &quot;this is just recording-technology difference&quot; via the 243 remastered-pair control and audio-match-quality filtering. It also proposes concrete future directions: applying the same framework to other national chart pairs, identifying which specific acoustic cues drive the offset, and using era inference to surface anachronistic artists within a single corpus (e.g. the Beatles were dated roughly 2 years later than their contemporaries in 15 of 18 runs, reflecting their studio production being ahead of its time).</p></div></section>
+  </div>
+</article>
+</div>
+  </div>
+  <div class="elsewhere" id="elsewhere" hidden></div>
+  <div class="empty"><span class="zh-only">沒有符合的論文。</span><span class="en-only">No matching papers.</span></div>
+
+  <footer>
+    <span class="zh-only">主要來源為 arXiv（cs.SD / eess.AS / cs.IR）公開全文，每週一另掃 ISMIR / TISMIR（完全開放獲取）與 ICASSP、IEEE、ACM 的開放部分。標「僅摘要層級」者代表無法取得全文，分析僅根據摘要。</span>
+    <span class="en-only">Mainly open-access arXiv full texts (cs.SD / eess.AS / cs.IR), with a Monday sweep of ISMIR / TISMIR (fully open access) and the open portions of ICASSP, IEEE and ACM. Entries marked &ldquo;abstract-level only&rdquo; had no retrievable full text.</span>
+  </footer>
+</div>
+
+<script>
+  // The freshness banner is computed in the browser, not at build time, because
+  // the failure it reports on is precisely the case where nothing gets rebuilt.
+  // A run that dies before pushing leaves yesterday's page in place; that page
+  // still notices, every time someone opens it.
+  function updateStale() {
+    var el = document.getElementById('stale'); if (!el) { return; }
+    el.hidden = true;
+    var latest = el.dataset.latest; if (!/^\d{4}-\d{2}-\d{2}$/.test(latest)) { return; }
+    var p = latest.split('-'), now = new Date();
+    var days = Math.floor(
+      (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+       Date.UTC(+p[0], +p[1] - 1, +p[2])) / 86400000);
+    if (days < 2) { return; }   // today or yesterday is normal
+    el.innerHTML =
+      '<span class="zh-only"><b>已經 ' + days + ' 天沒有更新。</b>' +
+      '最新一天是 ' + latest + '。每日任務應該每天都會加一天，所以這代表它壞了。</span>' +
+      '<span class="en-only"><b>No update for ' + days + ' days.</b> ' +
+      'The newest day is ' + latest + '. The daily run should add one every day, so this means it is broken.</span>';
+    el.hidden = false;
+  }
+  updateStale();
+
+  var filters = new Set(); var deepOnly = false;
+  // aria-expanded has to follow the class, or a screen reader is told every card
+  // is collapsed no matter what is on screen.
+  function syncCard(card) {
+    var head = card.querySelector('.card-head');
+    if (head) head.setAttribute('aria-expanded', card.classList.contains('open') ? 'true' : 'false');
+  }
+  function togglePaper(head) {
+    var card = head.parentElement;
+    card.classList.toggle('open');
+    syncCard(card);
+  }
+  // The header is a div with role=button, so Enter and Space do not activate it
+  // for free the way they would on a real button.
+  function cardKey(ev, head) {
+    if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+      ev.preventDefault();
+      togglePaper(head);
+    }
+  }
+  function setAll(open) {
+    document.querySelectorAll('.card').forEach(function (c) {
+      c.classList.toggle('open', open);
+      syncCard(c);
+    });
+  }
+  function toggleLang() {
+    document.body.classList.toggle('lang-zh');
+    document.body.classList.toggle('lang-en');
+    // Tell assistive tech and the hyphenator which language is actually showing.
+    document.documentElement.lang = document.body.classList.contains('lang-en') ? 'en' : 'zh-Hant';
+    applyFilters();   // the cross-page results are built in one language
+  }
+  function toggleFilter(btn) {
+    var k = btn.dataset.f, on = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+    if (on) { filters.delete(k); } else { filters.add(k); }
+    applyFilters();
+  }
+  function toggleDeep(btn) {
+    deepOnly = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', deepOnly ? 'true' : 'false');
+    applyFilters();
+  }
+  // Every paper lives on its topic page, and a page only holds its own slice.
+  // Without this, searching the index -- which is one day -- reports every other
+  // paper on the site as "no match", which reads as "we do not have it".
+  var PAPER_INDEX = [{"i":"2608.08787","a":"p-2608-08787","f":"generative","d":"2026-08-16","t":"Beyond Reconstruction: Full-Context Generative DiT for Music Generation","z":"超越重建：面向音樂生成的全語境生成式 DiT","u":"Yunjia Li, Menglin Wu, Junyu Dai, Xinyue Fan, Xiangang Li, Haoxu Wang, Jianwei Yu, Huaicheng Zhang, Han Zhao, Weiqin Li, Yufei Shi, Cheng Wen, Sitong Zhao, Qixi Zheng, Haina Zhu, Wei Li"},{"i":"2608.11329","a":"p-2608-11329","f":"other","d":"2026-08-16","t":"Qwen-MusicAVQA-7B: A Multimodal Model for Music Audio-Visual QA","z":"Qwen-MusicAVQA-7B：面向音樂視聽問答的多模態模型","u":"Maryam Dehdashti"},{"i":"2608.07359","a":"p-2608-07359","f":"other","d":"2026-08-16","t":"Assessing AI-generated music detection in real-world broadcast monitoring","z":"評估真實世界廣播監測中的 AI 生成音樂偵測","u":"David López-Ayala, Fernando García de la Cruz, Pablo Zinemanas, Emilio Molina, Martín Rocamora"},{"i":"2608.08985","a":"p-2608-08985","f":"transcription","d":"2026-08-15","t":"Beyond Piano: Cross-Instrument MIDI Velocity Estimation via Differentiable SoundFont Proxies","z":"不只是鋼琴：透過可微分 SoundFont 代理進行跨樂器 MIDI 力度估計","u":"Zhanhong He, Hanyu Meng, David Defeng Huang, Roberto Togneri"},{"i":"2608.11899","a":"p-2608-11899","f":"generative","d":"2026-08-15","t":"Do Text-to-Music Models Really Follow Instructions? A Counterfactual Evaluation of Key and Beat Grouping","z":"文字轉音樂模型真的有遵照指令嗎？針對調性與拍號分組的反事實評估","u":"Yining Wang"},{"i":"2608.10573","a":"p-2608-10573","f":"representation","d":"2026-08-15","t":"Beyond Dry References: Learning Relative Audio Effects Representations via Contrastive Distance Learning","z":"超越乾聲參考：透過對比距離學習音訊效果的相對表徵","u":"Xinlu Liu, Huibin Lin, Weixing Wei, Zhenhai Yan"},{"i":"2608.11755","a":"p-2608-11755","f":"generative","d":"2026-08-14","t":"MuseCritic: Learning Multi-Aspect Song Rewards through Natural-Language Aesthetic Critiques","z":"MuseCritic：透過自然語言美學評語學習多面向歌曲獎勵訊號","u":"Jiabao Zhuang, Changhao Jiang, Hanchen Wang, Jiahao Chen, Zhixiong Yang, Zhenghao Xiang, Yifei Cao, Jiajun Sun, Hui Li, Ming Zhang, Tao Ji, Tao Gui, Qi Zhang, Xuanjing Huang"},{"i":"2608.10979","a":"p-2608-10979","f":"transcription","d":"2026-08-14","t":"Pitch Contour Tokenization using VQ-VAE and Its Application on Korean Traditional Music Analysis","z":"用VQ-VAE做音高輪廓標記化及其在韓國傳統音樂分析上的應用","u":"Seonguk Ju, Seola Cho, Sooin Chung, Danbinaerin Han, Dasaem Jeong"},{"i":"2608.10980","a":"p-2608-10980","f":"cluster","d":"2026-08-14","t":"Measuring Cross-Cultural Style Diffusion Through Era Classification: US and Korean Popular Music","z":"透過年代分類量測跨文化風格擴散：美國與韓國流行音樂","u":"Dasol Lee, Minhee Lee, Seonguk Ju, Daewoong Kim, Harin Lee, Dasaem Jeong"},{"i":"2608.11026","a":"p-2608-11026","f":"representation","d":"2026-08-13","t":"MAJEPPA: Morphing and Assessing in a Unified Piano Performance Space","z":"MAJEPPA：在統一鋼琴演奏空間中同時做形變與評估","u":"Jinwen Zhou, Huan Zhang, Weixi Zhai, Jinhua Liang, Aidan O. T. Hogg, Simon Dixon"},{"i":"2608.10978","a":"p-2608-10978","f":"transcription","d":"2026-08-13","t":"A Dataset and Benchmark for Optical Music Recognition of String Quartet Scores","z":"弦樂四重奏樂譜光學辨識的資料集與基準測試","u":"Dongmin Kim, Brian Liu, Jose J. Valero-Mas, Dasaem Jeong"},{"i":"2608.10360","a":"p-2608-10360","f":"generative","d":"2026-08-13","t":"MazzikaAI: A knowledge-based performance-to-prompt compiler for real-time Arabic maqam accompaniment with a streaming text-to-music model","z":"MazzikaAI：把演奏編譯成即時提示詞，讓串流式文字轉音樂模型伴奏阿拉伯調式音樂","u":"Jiaxin Du, Boulbaba Abdeljaouad, Yong Zhuang, Haoyu Li"},{"i":"2608.09035","a":"p-2608-09035","f":"generative","d":"2026-08-12","t":"MusicLayout: Explicit Structural Planning for Controllable Text-to-Music Generation","z":"MusicLayout：為可控文字轉音樂生成加入顯式結構規劃層","u":"Shuyu Li, Kejun Zhang, Jiahe Lei, Shulei Ji, Zihao Wang, Jiaxing Yu, Wanying Wu, Lei Wang"},{"i":"2608.04511","a":"p-2608-04511","f":"transcription","d":"2026-08-12","t":"A Dual Evaluation for Music Transcription","z":"音樂轉譜的雙軸評估：記譜相似度與播放相似度","u":"Ping Wang, Guang Yang, Nazif Can Tamer, Victoria Ebert, Noah A. Smith"},{"i":"2608.08757","a":"p-2608-08757","f":"retrieval","d":"2026-08-12","t":"Steering Dense Music Retrieval with Open-Vocabulary Concept Discovery","z":"以開放詞彙概念發現操控稠密音樂檢索","u":"Julien Guinot, Alain Riou, Elio Quinton, György Fazekas"},{"i":"2608.06928","a":"p-2608-06928","f":"retrieval","d":"2026-08-11","t":"From Classification to Recommendation: Empirical Analysis of Audio Embedding Models Application for Content-Based Music Recommendation","z":"從分類到推薦：音訊嵌入模型應用於內容基礎音樂推薦的實證分析","u":"Qingrui Li, Haowei Lou, Chengkai Huang, Quan Z. Sheng, Lina Yao"},{"i":"2608.06165","a":"p-2608-06165","f":"transcription","d":"2026-08-11","t":"Audio-to-Score Transcription with the SheetSage-A2S Dataset","z":"以 SheetSage-A2S 資料集進行音訊轉樂譜轉錄","u":"Eoin Cummins, Zhongyi Huang, Alexandre D'Hooge, Zhuoru Mo, Yaolong Ju"},{"i":"2608.06638","a":"p-2608-06638","f":"representation","d":"2026-08-11","t":"MI-MIDI: Mechanistic Interpretability of Text-to-MIDI Generation Models via Probing, Lenses and Steering","z":"MI-MIDI：透過探針、透鏡與操控技術對文字轉 MIDI 生成模型做機制可解釋性分析","u":"Jakub Poćwiardowski, Mateusz Modrzejewski"},{"i":"2608.03920","a":"p-2608-03920","f":"representation","d":"2026-08-10","t":"Equivariant Music Transformer","z":"等變音樂 Transformer","u":"Zixun Guo, Simon Dixon"},{"i":"2608.07285","a":"p-2608-07285","f":"retrieval","d":"2026-08-10","t":"How Much AI Is in This Track? Quantifying the Proportion of AI-Generated Stems in Hybrid Music Mixtures","z":"這首歌裡有多少 AI 成分？量化混音中 AI 生成音軌的比例","u":"Fernando Garcia de la Cruz, David López-Ayala, Pablo Zinemanas, Emilio Molina, Martín Rocamora"},{"i":"10.5334/tismir.368","a":"p-10-5334-tismir-368","f":"generative","d":"2026-08-10","t":"Rhythm Guitar Tablature Continuation Through Picking Pattern Generation","z":"透過彈奏型態生成延續節奏吉他指法譜","u":"Alexandre D'Hooge, Ken Déguernel, Louis Bigo"},{"i":"2608.04624","a":"p-2608-04624","f":"transcription","d":"2026-08-09","t":"Masked diffusion enables coherent beat tracking","z":"遮罩擴散讓節拍追蹤產生前後一致的輸出","u":"Francesco Foscarin, Filip Korzeniowski, Richard Vogl"},{"i":"2608.05222","a":"p-2608-05222","f":"generative","d":"2026-08-09","t":"Diff-Symbo: Text-Controlled Long-Duration Symbolic Music Generation Using Autoregressive Latent Diffusion Model","z":"Diff-Symbo：用自迴歸潛在擴散模型做文字控制的長篇符號音樂生成","u":"Zhiwei Lin, Jun Chen, Boshi Tang, Weihao Wu, Yang Jing, Yaolong Ju, Fan Fan, Zhiyong Wu"},{"i":"2608.04543","a":"p-2608-04543","f":"retrieval","d":"2026-08-09","t":"Towards Robust Version Identification in the Wild: A Dataset, Benchmark, and Fine-Tuning Study","z":"邁向真實環境下穩健的版本辨識：資料集、基準與微調研究","u":"Simon Hachmeier, R. Oguz Araz, Dmitry Bogdanov, Robert Jäschke, Xavier Serra"},{"i":"2607.20253","a":"p-2607-20253","f":"generative","d":"2026-08-05","t":"Pushing the Frontier of Full-Song Generation: Hierarchical Autoregressive Planning Meets Flow-Matching Rendering","z":"推進全曲生成的前沿：階層式自迴歸規劃結合流匹配渲染","u":"Junyu Dai, Xinyue Fan, Weiqin Li, Xiangang Li, Yunjia Li, Bin Ma, Yukun Ma, Chongjia Ni, Yufei Shi, Biao Tian, Haoxu Wang, Menglin Wu, Jianwei Yu, Huaicheng Zhang, Han Zhao, Shengkui Zhao, Haina Zhu"},{"i":"2607.16657","a":"p-2607-16657","f":"representation","d":"2026-08-05","t":"HARP: Harmonic-Aware Residual Partitioning for Neural Audio Codecs","z":"HARP：神經音訊編解碼器的諧波感知殘差分割","u":"Qiaoyu Yang, Lixing He, Binyue Deng, Weifeng Zhao"},{"i":"2607.18189","a":"p-2607-18189","f":"transcription","d":"2026-08-05","t":"Dense-Sparse Dynamic Time Warping for Customizing Piano Concerto Accompaniments","z":"用於客製化鋼琴協奏曲伴奏的稠密—稀疏動態時間規整","u":"TJ Tsai, Kavi Dey, Yigitcan Özer, Meinard Müller"}];
+  var SUBFIELD_LABELS = {"generative":["生成式音樂模型","Generative Music Models"],"representation":["音源分離與表徵學習","Separation & Representation"],"transcription":["轉譜與音高分析","Transcription & Pitch"],"retrieval":["檢索、推薦與情緒","Retrieval, RecSys & Emotion"],"cluster":["音樂聚類與相似度","Music Clustering & Similarity"],"other":["其他 MIR 主題","Other MIR Topics"]};
+  var LINK_PREFIX = "";
+  var ON_PAGE = {};
+  document.querySelectorAll('[data-paper-id]').forEach(function (c) { ON_PAGE[c.dataset.paperId] = 1; });
+  var ELSEWHERE_MAX = 20;
+
+  // Built here rather than shipped: storing it would repeat the titles it is
+  // made of in every record, on every page.
+  function haystack(p) {
+    if (p._h === undefined) {
+      p._h = [p.t, p.z, p.u, p.i, p.d, (SUBFIELD_LABELS[p.f] || []).join(' ')]
+        .join(' ').toLowerCase();
+    }
+    return p._h;
+  }
+
+  function renderElsewhere(q) {
+    var box = document.getElementById('elsewhere');
+    if (!box) { return 0; }
+    if (!q) { box.hidden = true; box.innerHTML = ''; return 0; }
+    var hits = PAPER_INDEX.filter(function (p) {
+      return !ON_PAGE[p.i] && haystack(p).indexOf(q) !== -1;
+    });
+    if (!hits.length) { box.hidden = true; box.innerHTML = ''; return 0; }
+    var zh = document.body.classList.contains('lang-zh');
+    var items = hits.slice(0, ELSEWHERE_MAX).map(function (p) {
+      var href = LINK_PREFIX + encodeURIComponent(p.f) + '.html#' + p.a;
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = href;
+      var t = document.createElement('span');
+      t.className = 'ti';
+      t.textContent = zh && p.z ? p.z : p.t;
+      var w = document.createElement('span');
+      w.className = 'wh';
+      w.textContent = p.d + ' · ' + p.i;
+      a.appendChild(t); a.appendChild(w); li.appendChild(a);
+      return li;
+    });
+    box.innerHTML = '';
+    var h = document.createElement('h3');
+    h.textContent = zh ? '在其他頁面找到 ' + hits.length + ' 篇'
+                       : hits.length + ' more on other pages';
+    var ol = document.createElement('ol');
+    items.forEach(function (li) { ol.appendChild(li); });
+    box.appendChild(h); box.appendChild(ol);
+    if (hits.length > ELSEWHERE_MAX) {
+      var more = document.createElement('div');
+      more.className = 'more';
+      more.textContent = zh ? '還有 ' + (hits.length - ELSEWHERE_MAX) + ' 篇未列出'
+                            : (hits.length - ELSEWHERE_MAX) + ' not listed';
+      box.appendChild(more);
+    }
+    box.hidden = false;
+    return hits.length;
+  }
+
+  function applyFilters() {
+    var q = document.getElementById('q').value.trim().toLowerCase(), shown = 0;
+    document.querySelectorAll('.card').forEach(function (c) {
+      var ok = true;
+      if (filters.size && !filters.has(c.dataset.subfield)) ok = false;
+      if (deepOnly && c.dataset.deep !== '1') ok = false;
+      if (ok && q) ok = c.dataset.search.indexOf(q) !== -1;
+      c.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    document.querySelectorAll('.group').forEach(function (g) {
+      var any = Array.prototype.some.call(g.querySelectorAll('.card'), function (c) { return c.style.display !== 'none'; });
+      g.style.display = any ? '' : 'none';
+    });
+    // Only a search looks beyond this page; the chips and the deep toggle are
+    // filters over what is here.
+    var away = renderElsewhere(filters.size || deepOnly ? '' : q);
+    document.body.classList.toggle('no-results', shown === 0 && away === 0);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && document.activeElement.id !== 'q') { e.preventDefault(); document.getElementById('q').focus(); }
+  });
+  // Only the index opts in: there the first group is today, which is the whole
+  // point of the page. On a topic page it would unfold every paper in the topic.
+  var list = document.getElementById('list');
+  if (list && list.dataset.expandFirst === '1') {
+    var firstGroup = list.querySelector('.group');
+    if (firstGroup) firstGroup.querySelectorAll('.card').forEach(function (c) {
+      c.classList.add('open');
+      syncCard(c);
+    });
+  }
+
+  // Arriving from a cross-page search result: open that paper and go to it,
+  // otherwise the link lands on a collapsed card in a long list.
+  function openFromHash() {
+    if (!/^#p-[a-z0-9-]+$/.test(location.hash)) { return; }
+    var card = document.getElementById(location.hash.slice(1));
+    if (!card || !card.classList.contains('card')) { return; }
+    card.classList.add('open');
+    syncCard(card);
+    card.scrollIntoView({block: 'start'});
+  }
+  openFromHash();
+  window.addEventListener('hashchange', openFromHash);
+</script>
+</body>
+</html>
