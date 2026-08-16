@@ -86,6 +86,12 @@ def anchor(arxiv_id):
 REQUIRED_FIELDS = ("arxiv_id", "title_en", "title_zh", "authors", "submitted",
                    "categories", "subfield", "why_zh", "why_en")
 
+# Soft paragraph limits, from measuring the committed entries: the median
+# paragraph is well under, and these catch the tail that reads as a wall of
+# text. The two numbers flag the same share of paragraphs in each language.
+MAX_PARA_ZH = 400   # characters
+MAX_PARA_EN = 160   # words
+
 
 def esc(text):
     return htmllib.escape(text or "", quote=True)
@@ -209,6 +215,35 @@ def validate_days(days):
                 else:
                     seen[aid] = date
     return problems
+
+
+def long_paragraphs(entries):
+    """Return [(where, size, limit), ...] for paragraphs over the soft limit.
+
+    Advisory, never fatal: how long a paragraph should be is a judgement call,
+    and a build that refuses over prose style would block a day's work over a
+    style nit. validate_days() is the one that refuses; this only warns.
+
+    Callers pass the newest day alone. Warning about the whole archive would
+    print over a hundred lines every build, and a warning that long is one
+    nobody reads -- while the day just written is still worth splitting.
+    """
+    out = []
+    for e in entries:
+        for key in SECTION_KEYS:
+            body = (e.get("sections") or {}).get(key) or {}
+            for lang, limit in (("zh", MAX_PARA_ZH), ("en", MAX_PARA_EN)):
+                for para in (body.get(lang) or "").split("\n\n"):
+                    if not para.strip():
+                        continue
+                    # Characters for Chinese, words for English -- the same
+                    # paragraph measured the way each language reads.
+                    size = len(para) if lang == "zh" else len(para.split())
+                    if size > limit:
+                        out.append(("%s %s %s.%s" % (e.get("read_date", ""),
+                                                     e.get("arxiv_id", ""), key, lang),
+                                    size, limit))
+    return out
 
 
 def render_entry(e):
@@ -798,6 +833,17 @@ def main(argv=None):
 
     # No topics/index.html: the nav already lists every topic on every page, so
     # a separate list of them was a page nothing linked to.
+    longs = long_paragraphs(days[latest])
+    if longs:
+        shown = longs[:12]
+        sys.stderr.write(
+            "warning: %d paragraph(s) in %s over the soft limit "
+            "(zh %d chars / en %d words) -- split them:\n  %s\n"
+            % (len(longs), latest, MAX_PARA_ZH, MAX_PARA_EN,
+               "\n  ".join("%s: %d" % (where, size) for where, size, _ in shown)))
+        if len(longs) > len(shown):
+            sys.stderr.write("  ... and %d more\n" % (len(longs) - len(shown)))
+
     print("built: index.html (%s, %d papers), %d topic page(s), %d papers total"
           % (latest, len(days[latest]), len(topics), len(all_entries)))
     return 0

@@ -254,6 +254,46 @@ class TestRenderEntry(unittest.TestCase):
         self.assertEqual(html.count('<section class="sec">'), 5)
 
 
+class TestLongParagraphs(unittest.TestCase):
+    def secs(self, **over):
+        s = {k: {"zh": "短", "en": "short"} for k in bs.SECTION_KEYS}
+        s.update(over)
+        return s
+
+    def test_compliant_prose_is_silent(self):
+        self.assertEqual(bs.long_paragraphs([entry()]), [])
+
+    def test_flags_a_long_chinese_paragraph(self):
+        e = entry(sections=self.secs(method={"zh": "字" * (bs.MAX_PARA_ZH + 1), "en": "ok"}))
+        [(where, size, limit)] = bs.long_paragraphs([e])
+        self.assertIn("method.zh", where)
+        self.assertEqual(size, bs.MAX_PARA_ZH + 1)
+        self.assertEqual(limit, bs.MAX_PARA_ZH)
+
+    def test_flags_a_long_english_paragraph(self):
+        e = entry(sections=self.secs(discussion={"zh": "短", "en": "w " * (bs.MAX_PARA_EN + 1)}))
+        [(where, size, _)] = bs.long_paragraphs([e])
+        self.assertIn("discussion.en", where)
+        self.assertEqual(size, bs.MAX_PARA_EN + 1)
+
+    def test_exactly_at_the_limit_is_fine(self):
+        e = entry(sections=self.secs(method={"zh": "字" * bs.MAX_PARA_ZH, "en": "ok"}))
+        self.assertEqual(bs.long_paragraphs([e]), [])
+
+    def test_blank_line_splits_the_measurement(self):
+        """Splitting a wall into paragraphs is the fix, so it has to clear it."""
+        half = "字" * (bs.MAX_PARA_ZH - 10)
+        e = entry(sections=self.secs(method={"zh": half + "\n\n" + half, "en": "ok"}))
+        self.assertEqual(bs.long_paragraphs([e]), [])
+
+    def test_names_the_day_and_the_paper(self):
+        e = entry(arxiv_id="2608.99999", read_date="2026-09-01",
+                  sections=self.secs(intro={"zh": "字" * 500, "en": "ok"}))
+        [(where, _, _)] = bs.long_paragraphs([e])
+        self.assertIn("2026-09-01", where)
+        self.assertIn("2608.99999", where)
+
+
 class TestAnchor(unittest.TestCase):
     def test_arxiv_id(self):
         self.assertEqual(bs.anchor("2608.03920"), "p-2608-03920")
@@ -459,6 +499,35 @@ class TestMainEndToEnd(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('id="stale"', self.read(out, "index.html"))
         self.assertNotIn('id="stale"', self.read(out, "topics", "generative.html"))
+
+    def test_long_paragraphs_warn_but_never_fail_the_build(self):
+        """Prose length is a judgement call, so it must not gate a day's output."""
+        wall = {k: {"zh": "字" * 900, "en": "word " * 300} for k in bs.SECTION_KEYS}
+        with DataDir() as d:
+            d.day("2026-08-01", [entry(sections=wall)])
+            out = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, out, True)
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                code = bs.main([d.path, out])
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(os.path.join(out, "index.html")))
+        self.assertIn("warning", err.getvalue())
+        self.assertIn("over the soft limit", err.getvalue())
+
+    def test_only_the_newest_day_is_warned_about(self):
+        """A hundred lines of warning about the archive is a warning nobody reads."""
+        wall = {k: {"zh": "字" * 900, "en": "ok"} for k in bs.SECTION_KEYS}
+        with DataDir() as d:
+            d.day("2026-08-01", [entry(arxiv_id="old", sections=wall)])
+            d.day("2026-08-02", [entry(arxiv_id="new")])
+            out = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, out, True)
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                code = bs.main([d.path, out])
+        self.assertEqual(code, 0)
+        self.assertNotIn("warning", err.getvalue())
 
     def test_bad_data_fails_the_build_and_writes_nothing(self):
         with DataDir() as d:
