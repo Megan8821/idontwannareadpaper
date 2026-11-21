@@ -548,5 +548,68 @@ class TestMainEndToEnd(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+
+class TestSubfields(unittest.TestCase):
+    """The topic set is part of the daily brief too: DAILY_TASK.md tells the agent
+    which subfields exist, and the README lists them. If code and brief drift apart,
+    the agent picks a subfield the build rejects, or never picks a new one."""
+
+    ORIGINAL = ("generative", "representation", "transcription", "retrieval", "cluster", "other")
+    ADDED = ("omr", "agents", "benchmark")
+
+    def here(self, name):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), encoding="utf-8") as f:
+            return f.read()
+
+    def test_original_six_are_kept(self):
+        for key in self.ORIGINAL:
+            self.assertIn(key, bs.SUBFIELDS)
+
+    def test_three_added_subfields_exist(self):
+        for key in self.ADDED:
+            self.assertIn(key, bs.SUBFIELDS)
+        self.assertEqual(len(bs.SUBFIELDS), 9)
+
+    def test_other_stays_last(self):
+        # "other" is the catch-all; nav and filter chips follow dict order.
+        self.assertEqual(list(bs.SUBFIELDS)[-1], "other")
+
+    def test_every_subfield_has_both_names_and_a_colour(self):
+        for key, v in bs.SUBFIELDS.items():
+            with self.subTest(subfield=key):
+                self.assertTrue(v["zh"].strip() and v["en"].strip())
+                self.assertRegex(v["color"], r"^#[0-9a-f]{6}$")
+
+    def test_colours_are_distinct(self):
+        colours = [v["color"] for v in bs.SUBFIELDS.values()]
+        self.assertEqual(len(colours), len(set(colours)))
+
+    def test_added_subfields_validate(self):
+        days = {"2026-08-%02d" % (i + 1): [dict(entry(arxiv_id=k, subfield=k), read_date="x")]
+                for i, k in enumerate(self.ADDED)}
+        self.assertEqual(bs.validate_days(days), [])
+
+    def test_added_subfield_gets_a_reachable_topic_page(self):
+        with DataDir() as d:
+            d.day("2026-08-01", [entry(arxiv_id="o1", subfield="omr", title_en="An OMR Paper")])
+            out = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, out, True)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = bs.main([d.path, out])
+        self.assertEqual(code, 0)
+        with open(os.path.join(out, "topics", "omr.html"), encoding="utf-8") as f:
+            self.assertIn('data-paper-id="o1"', f.read())
+        with open(os.path.join(out, "index.html"), encoding="utf-8") as f:
+            self.assertIn("topics/omr.html", f.read())
+
+    def test_daily_task_table_lists_exactly_the_subfields(self):
+        rows = re.findall(r"^\| `([a-z]+)` \|", self.here("DAILY_TASK.md"), re.M)
+        self.assertEqual(sorted(rows), sorted(bs.SUBFIELDS))
+
+    def test_readme_lists_exactly_the_subfields(self):
+        rows = re.findall(r"^- `([a-z]+)` ", self.here("README.md"), re.M)
+        self.assertEqual(sorted(rows), sorted(bs.SUBFIELDS))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
