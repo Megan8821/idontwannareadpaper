@@ -13,7 +13,7 @@ Reads every data/YYYY-MM-DD.json and writes:
 The split is deliberate: the front page answers "what is new today", and
 everything ever read is reached by topic instead of by date. Browsing by date
 does not scale -- a year of daily entries is 365 headings to scroll past,
-whereas the topic set stays fixed at six.
+whereas the topic set stays fixed (nine since 2026-11; SUBFIELDS below).
 
 Per-day JSON schema:
 {
@@ -24,7 +24,7 @@ Per-day JSON schema:
                                      # put the DOI or other stable id here instead
       "title_en": "...", "title_zh": "...",
       "authors": "...", "submitted": "2026-07-18", "categories": "cs.SD",
-      "subfield": "generative|representation|transcription|retrieval|cluster|other",
+      "subfield": "generative|representation|transcription|retrieval|cluster|omr|agents|benchmark|other",
       "deep": true,                 # novel architecture/technique -> deep dive badge
       "fulltext_read": true,        # false => analysis is abstract-level only
       "source_url": "https://transactions.ismir.net/...",  # optional: set for
@@ -61,6 +61,12 @@ SUBFIELDS = {
     "transcription": {"zh": "轉譜與音高分析", "en": "Transcription & Pitch", "color": "#047857"},
     "retrieval": {"zh": "檢索、推薦與情緒", "en": "Retrieval, RecSys & Emotion", "color": "#7e22ce"},
     "cluster": {"zh": "音樂聚類與相似度", "en": "Music Clustering & Similarity", "color": "#a16207"},
+    # Added 2026-11: these three topics mostly appear outside cs.SD / eess.AS / cs.IR
+    # (OMR papers are usually cs.CV only), so DAILY_TASK.md also scans cs.CV, cs.AI,
+    # cs.MA and cs.CL with a music filter. "other" stays last as the catch-all.
+    "omr": {"zh": "光學樂譜辨識與樂譜影像", "en": "Optical Music Recognition & Score Images", "color": "#0e7490"},
+    "agents": {"zh": "音樂代理與多代理系統", "en": "Music Agents & Multi-Agent Systems", "color": "#be123c"},
+    "benchmark": {"zh": "樂譜與音樂理解的基準與評估", "en": "Score Understanding Benchmarks & Evaluation", "color": "#4d7c0f"},
     "other": {"zh": "其他 MIR 主題", "en": "Other MIR Topics", "color": "#475569"},
 }
 
